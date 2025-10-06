@@ -8,9 +8,12 @@ public class ClienteMulti {
 
     public static void main(String[] args) throws IOException {
         Socket s = new Socket("localhost", 8080);
-        System.out.print("Ingresa tu nombre: ");
-        Scanner scanner = new Scanner(System.in);
-        String nombre = scanner.nextLine();
+
+        System.out.print("Introduce tu nombre: ");
+        Scanner teclado = new Scanner(System.in);
+        String nombre = teclado.nextLine();
+
+        System.out.println("Para enviar un mensaje privado, usa: @usuario mensaje");
 
         Mandar paraMandar = new Mandar(s, nombre);
         Thread hiloParaMandar = new Thread(paraMandar);
