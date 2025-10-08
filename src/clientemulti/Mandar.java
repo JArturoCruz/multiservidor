@@ -10,9 +10,8 @@ public class Mandar implements Runnable {
 
     final BufferedReader teclado = new BufferedReader(new InputStreamReader(System.in));
     final DataOutputStream salida;
-    private final String nombre; // Variable para almacenar el nombre
+    private final String nombre;
 
-    // El constructor ahora acepta el nombre del usuario
     public Mandar(Socket s, String nombre) throws IOException {
         this.salida = new DataOutputStream(s.getOutputStream());
         this.nombre = nombre;

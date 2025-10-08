@@ -1,6 +1,6 @@
 package servidormulti;
 import mensaje.Mensaje;
-
+import servidormulti.BDusuarios;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
@@ -10,8 +10,8 @@ public class UnCliente implements Runnable {
     final DataOutputStream salida;
     final DataInputStream entrada;
     private String nombreCliente;
-    private int mensajesGratisEnviados = 0; // Nuevo contador de mensajes enviados
-    private boolean autenticado = false;    // Nuevo estado de autenticación
+    private int mensajesGratisEnviados = 0;
+    private boolean autenticado = false;
     private static final int LIMITE_MENSAJES_GRATIS = 3;
 
     UnCliente(Socket s) throws IOException {
@@ -27,13 +27,54 @@ public class UnCliente implements Runnable {
         this.salida.writeUTF(mensaje);
     }
 
-    private void manejarAutenticacion(String comando) throws IOException {
-        if (!autenticado) {
-            autenticado = true;
-            enviarMensaje("Sistema: Autenticación (" + comando + ") exitosa. Ahora puedes enviar mensajes sin límite.");
-            System.out.println(nombreCliente + " se ha autenticado.");
-        } else {
-            enviarMensaje("Sistema: Ya estás autenticado.");
+    private void manejarAutenticacion(String comandoCompleto) throws IOException {
+        String[] partes = comandoCompleto.split(" ");
+        String comando = partes[0];
+
+        if (partes.length != 2) {
+            enviarMensaje("Sistema: Formato incorrecto. Uso: " + comando + " <PIN de 4 dígitos>");
+            return;
+        }
+
+        String pin = partes[1];
+
+        if (!pin.matches("\\d{4}")) {
+            enviarMensaje("Sistema: El PIN debe ser de 4 dígitos numéricos.");
+            return;
+        }
+
+        if (autenticado) {
+            enviarMensaje("Sistema: Ya estás autenticado. No es necesario realizar '" + comando + "'.");
+            return;
+        }
+
+        if (comando.equals("/register")) {
+            if (BDusuarios.UsuarioExistente(nombreCliente)) {
+                enviarMensaje("Sistema: Error al registrar. El usuario '" + nombreCliente + "' ya existe. Por favor, usa /login.");
+            } else {
+                if (BDusuarios.RegistrarUsuario(nombreCliente, pin)) {
+                    autenticado = true;
+                    mensajesGratisEnviados = 0;
+                    enviarMensaje("Sistema: ¡Registro exitoso! Ahora estás autenticado y puedes enviar mensajes ilimitados.");
+                    Mensaje.notificarATodos(nombreCliente + " ha completado su registro y ahora es un usuario verificado.", this);
+                } else {
+                    enviarMensaje("Sistema: Error desconocido al registrar. Intenta de nuevo.");
+                }
+            }
+
+        } else if (comando.equals("/login")) {
+            if (!BDusuarios.UsuarioExistente(nombreCliente)) {
+                enviarMensaje("Sistema: Error al iniciar sesión. El usuario '" + nombreCliente + "' no está registrado. Por favor, usa /register.");
+            } else {
+                if (BDusuarios.AutenticarUsuario(nombreCliente, pin)) {
+                    autenticado = true;
+                    mensajesGratisEnviados = 0;
+                    enviarMensaje("Sistema: ¡Inicio de sesión exitoso! Ahora estás autenticado y puedes enviar mensajes ilimitados.");
+                    Mensaje.notificarATodos(nombreCliente + " ha iniciado sesión.", this);
+                } else {
+                    enviarMensaje("Sistema: PIN incorrecto para el usuario '" + nombreCliente + "'.");
+                }
+            }
         }
     }
 
@@ -41,21 +82,20 @@ public class UnCliente implements Runnable {
     public void run() {
         try {
             nombreCliente = entrada.readUTF();
+
             ServidorMulti.clientes.put(nombreCliente, this);
+
             Mensaje.notificarATodos(nombreCliente + " se ha unido al chat como invitado.", this);
 
             enviarMensaje("Sistema: Tienes un límite de " + LIMITE_MENSAJES_GRATIS + " mensajes antes de necesitar autenticarte.");
-            enviarMensaje("Sistema: Usa '/login' o '/register' para autenticarte.");
+            enviarMensaje("Sistema: Tu nombre de usuario es '" + nombreCliente + "'.");
+            enviarMensaje("Sistema: Usa '/register <PIN>' (ej: /register 1234) o '/login <PIN>' para autenticarte.");
 
             while (true) {
                 String mensaje = entrada.readUTF();
 
-                if (mensaje.startsWith("/")) {
-                    if (mensaje.equals("/login") || mensaje.equals("/register")) {
-                        manejarAutenticacion(mensaje);
-                    } else {
-                        enviarMensaje("Sistema: Comando no reconocido. Usa '/login' o '/register' para autenticarte.");
-                    }
+                if (mensaje.startsWith("/register") || mensaje.startsWith("/login")) {
+                    manejarAutenticacion(mensaje);
                     continue;
                 }
 
@@ -69,11 +109,10 @@ public class UnCliente implements Runnable {
                         if (restantes > 0) {
                             enviarMensaje("Sistema: Mensaje enviado. Te quedan " + restantes + " mensajes gratis.");
                         } else {
-                            enviarMensaje("Sistema: ¡ATENCIÓN! Has agotado tus mensajes gratis (" + LIMITE_MENSAJES_GRATIS + "). Por favor, usa '/login' o '/register' para continuar enviando.");
+                            enviarMensaje("Sistema: ¡ATENCIÓN! Has agotado tus mensajes gratis (" + LIMITE_MENSAJES_GRATIS + "). Por favor, usa '/login <PIN>' o '/register <PIN>' para continuar enviando.");
                         }
                     } else {
-                        // Límite excedido: bloquea el envío y avisa
-                        enviarMensaje("Sistema: No puedes enviar más mensajes. Debes usar '/login' o '/register' para continuar enviando.");
+                        enviarMensaje("Sistema: No puedes enviar más mensajes. Debes usar '/login <PIN>' o '/register <PIN>' para continuar enviando.");
                     }
                 }
             }

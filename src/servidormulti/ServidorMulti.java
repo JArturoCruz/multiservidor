@@ -7,7 +7,6 @@ import java.util.HashMap;
 
 public class ServidorMulti {
 
-    // Ahora el HashMap usa el nombre del cliente (String) como clave
     public static HashMap<String, UnCliente> clientes = new HashMap<>();
 
     public static void main(String[] args) throws IOException {

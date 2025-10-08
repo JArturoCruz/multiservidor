@@ -6,17 +6,12 @@ import java.util.HashMap;
 public class BDusuarios {
 
     private static final String DB_FILE = "usuarios.txt";
-    // Guarda los usuarios en memoria para acceso rápido: <nombreUsuario, pin>
     private static HashMap<String, String> usuarios = new HashMap<>();
 
     static {
-        // Carga los usuarios del archivo al iniciar el servidor
         CargarUsuarios();
     }
 
-    /**
-     * Carga los usuarios del archivo a la memoria (HashMap).
-     */
     private static void CargarUsuarios() {
         try (BufferedReader br = new BufferedReader(new FileReader(DB_FILE))) {
             String line;
@@ -35,9 +30,6 @@ public class BDusuarios {
         }
     }
 
-    /**
-     * Guarda los usuarios de la memoria al archivo de texto.
-     */
     private static void GuardarUsuarios() {
         try (PrintWriter pw = new PrintWriter(new FileWriter(DB_FILE, false))) {
             for (String user : usuarios.keySet()) {
@@ -49,35 +41,25 @@ public class BDusuarios {
         }
     }
 
-    /**
-     * Verifica si un usuario ya existe.
-     */
-    public static boolean UsuariosExistente(String usuario) {
+    public static boolean UsuarioExistente(String usuario) {
         return usuarios.containsKey(usuario);
     }
 
-    /**
-     * Registra un nuevo usuario y guarda la base de datos.
-     */
     public static boolean RegistrarUsuario(String usuario, String pin) {
-        if (UsuariosExistente(usuario)) {
+        if (UsuarioExistente(usuario)) {
             return false; // Usuario ya existe
         }
 
-        // La validación del PIN (4 dígitos) se hace en UnCliente antes de llamar aquí.
 
         usuarios.put(usuario, pin);
         GuardarUsuarios();
         return true;
     }
 
-    /**
-     * Verifica las credenciales de un usuario.
-     */
     public static boolean AutenticarUsuario(String usuario, String pin) {
-        if (UsuariosExistente(usuario)) {
+        if (UsuarioExistente(usuario)) {
             return usuarios.get(usuario).equals(pin);
         }
-        return false; // El usuario no existe
+        return false;
     }
 }
