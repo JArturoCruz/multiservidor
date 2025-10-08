@@ -16,7 +16,7 @@ public class Mensaje {
 
     private static void enviarMensajePrivado(String mensaje, UnCliente remitente) throws IOException {
         String[] partes = mensaje.split(" ", 2);
-        String destinatariosStr = partes[0].substring(1);
+        String destinatariosStr = partes[0].substring(1); // Quita la "@"
         String mensajePrivado = (partes.length > 1) ? partes[1] : "";
 
         if (mensajePrivado.isEmpty()) {
