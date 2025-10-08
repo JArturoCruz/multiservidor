@@ -1,6 +1,6 @@
 package servidormulti;
 import mensaje.Mensaje;
-import servidormulti.BDusuarios;
+
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
@@ -100,16 +100,30 @@ public class UnCliente implements Runnable {
                 }
 
                 if (autenticado) {
-                    Mensaje.procesar(mensaje, this);
+                    if (!mensaje.startsWith("@") && mensaje.trim().isEmpty()) {
+                        enviarMensaje("Sistema: No puedes enviar un mensaje público vacío.");
+                    } else {
+                        Mensaje.procesar(mensaje, this);
+                    }
                 } else {
                     if (mensajesGratisEnviados < LIMITE_MENSAJES_GRATIS) {
-                        Mensaje.procesar(mensaje, this);
-                        mensajesGratisEnviados++;
-                        int restantes = LIMITE_MENSAJES_GRATIS - mensajesGratisEnviados;
-                        if (restantes > 0) {
-                            enviarMensaje("Sistema: Mensaje enviado. Te quedan " + restantes + " mensajes gratis.");
+
+                        boolean mensajeValido = false;
+
+                        if (!mensaje.startsWith("@") && mensaje.trim().isEmpty()) {
+                            enviarMensaje("Sistema: No puedes enviar un mensaje público vacío.");
                         } else {
-                            enviarMensaje("Sistema: ¡ATENCIÓN! Has agotado tus mensajes gratis (" + LIMITE_MENSAJES_GRATIS + "). Por favor, usa '/login <PIN>' o '/register <PIN>' para continuar enviando.");
+                            mensajeValido = Mensaje.procesar(mensaje, this);
+                        }
+
+                        if (mensajeValido) {
+                            mensajesGratisEnviados++;
+                            int restantes = LIMITE_MENSAJES_GRATIS - mensajesGratisEnviados;
+                            if (restantes > 0) {
+                                enviarMensaje("Sistema: Mensaje enviado. Te quedan " + restantes + " mensajes gratis.");
+                            } else {
+                                enviarMensaje("Sistema: ¡ATENCIÓN! Has agotado tus mensajes gratis (" + LIMITE_MENSAJES_GRATIS + "). Por favor, usa '/login <PIN>' o '/register <PIN>' para continuar enviando.");
+                            }
                         }
                     } else {
                         enviarMensaje("Sistema: No puedes enviar más mensajes. Debes usar '/login <PIN>' o '/register <PIN>' para continuar enviando.");
