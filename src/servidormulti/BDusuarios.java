@@ -16,7 +16,6 @@ public class BDusuarios {
         try (BufferedReader br = new BufferedReader(new FileReader(DB_FILE))) {
             String line;
             while ((line = br.readLine()) != null) {
-                // El archivo tiene el formato: usuario,pin
                 String[] parts = line.split(",");
                 if (parts.length == 2) {
                     usuarios.put(parts[0].trim(), parts[1].trim());
@@ -47,9 +46,8 @@ public class BDusuarios {
 
     public static boolean RegistrarUsuario(String usuario, String pin) {
         if (UsuarioExistente(usuario)) {
-            return false; // Usuario ya existe
+            return false;
         }
-
 
         usuarios.put(usuario, pin);
         GuardarUsuarios();

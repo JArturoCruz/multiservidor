@@ -10,20 +10,13 @@ public class Mandar implements Runnable {
 
     final BufferedReader teclado = new BufferedReader(new InputStreamReader(System.in));
     final DataOutputStream salida;
-    private final String nombre;
 
-    public Mandar(Socket s, String nombre) throws IOException {
+    public Mandar(Socket s) throws IOException {
         this.salida = new DataOutputStream(s.getOutputStream());
-        this.nombre = nombre;
     }
 
     @Override
     public void run() {
-        try {
-            salida.writeUTF(nombre);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
 
         while (true) {
             String mensaje;

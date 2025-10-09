@@ -9,20 +9,15 @@ public class ClienteMulti {
     public static void main(String[] args) throws IOException {
         Socket s = new Socket("localhost", 8080);
 
-        System.out.print("Introduce tu nombre (será tu usuario): ");
-        Scanner teclado = new Scanner(System.in);
-        String nombre = teclado.nextLine();
-
-
-        System.out.println("Tu nombre de usuario es: " + nombre);
-        System.out.println("Como invitado, solo puedes enviar 3 mensajes.");
+        System.out.println("\n Instrucciones");
+        System.out.println("Actualmente eres un usuario anónimo y tienes 3 mensajes gratis.");
         System.out.println("Para enviar un mensaje privado, usa: @usuario mensaje");
-        System.out.println("Para registrarte o iniciar sesión y enviar ilimitadamente, usa:");
-        System.out.println("  - Registrar: /register <PIN de 4 dígitos> (Ej: /register 1234)");
-        System.out.println("  - Iniciar Sesión: /login <PIN de 4 dígitos> (Ej: /login 1234)");
+        System.out.println("Para registrarte o iniciar sesión y establecer tu nombre, usa:");
+        System.out.println("Registrar: /register <nombre_usuario> <PIN de 4 dígitos> (Ej: /register Arturo 1234)");
+        System.out.println("Iniciar Sesión: /login <nombre_usuario> <PIN de 4 dígitos> (Ej: /login Arturo 1234)");
 
 
-        Mandar paraMandar = new Mandar(s, nombre);
+        Mandar paraMandar = new Mandar(s);
         Thread hiloParaMandar = new Thread(paraMandar);
         hiloParaMandar.start();
 

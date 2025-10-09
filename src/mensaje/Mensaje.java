@@ -63,6 +63,7 @@ public class Mensaje {
                     cliente.enviarMensaje("Sistema: " + notificacion);
                 }
             } catch (IOException e) {
+                // Ignorar
             }
         }
     }
