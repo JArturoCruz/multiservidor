@@ -14,151 +14,117 @@ public class UnCliente implements Runnable {
     private boolean autenticado = false;
     private static final int LIMITE_MENSAJES_GRATIS = 3;
 
+    private final AutenticadorCliente autenticador;
+    private final ControladorMensajesInvitado controladorInvitado;
+
     UnCliente(Socket s) throws IOException {
         salida = new DataOutputStream(s.getOutputStream());
         entrada = new DataInputStream(s.getInputStream());
-    }
-
-    public String getNombreCliente() {
-        return nombreCliente;
+        this.autenticador = new AutenticadorCliente(this);
+        this.controladorInvitado = new ControladorMensajesInvitado(this);
     }
 
     public void enviarMensaje(String mensaje) throws IOException {
         this.salida.writeUTF(mensaje);
     }
 
-    private void manejarAutenticacion(String comandoCompleto) throws IOException {
-        String[] partes = comandoCompleto.split(" ");
-        String comando = partes[0];
-        String oldNombreCliente = nombreCliente;
+    public String getNombreCliente() {
+        return nombreCliente;
+    }
 
-        if (partes.length != 3) {
-            enviarMensaje("Sistema: Formato incorrecto. Uso: " + comando + " <nombre_usuario> <PIN de 4 dígitos>");
-            return;
-        }
+    public void setNombreCliente(String nombreCliente) {
+        this.nombreCliente = nombreCliente;
+    }
 
-        String nuevoNombre = partes[1];
-        String pin = partes[2];
+    public void setAutenticado(boolean autenticado) {
+        this.autenticado = autenticado;
+    }
 
-        if (!pin.matches("\\d{4}")) {
-            enviarMensaje("Sistema: El PIN debe ser de 4 dígitos numéricos.");
-            return;
-        }
+    public boolean isAutenticado() {
+        return autenticado;
+    }
 
-        if (autenticado) {
-            enviarMensaje("Sistema: Ya estás autenticado. No es necesario realizar '" + comando + "'.");
-            return;
-        }
+    public int getMensajesGratisEnviados() {
+        return mensajesGratisEnviados;
+    }
 
-        if (nuevoNombre.toLowerCase().startsWith("anonimo") && !nuevoNombre.equals(oldNombreCliente)) {
-            enviarMensaje("Sistema: El nombre de usuario '" + nuevoNombre + "' está reservado. Por favor, elige otro.");
-            return;
-        }
+    public void incrementarMensajesGratisEnviados() {
+        this.mensajesGratisEnviados++;
+    }
 
-        if (comando.equals("/register")) {
-            Register(nuevoNombre, pin, oldNombreCliente);
-        } else if (comando.equals("/login")) {
-            Login(nuevoNombre, pin, oldNombreCliente);
+    public int getLimiteMensajesGratis() {
+        return LIMITE_MENSAJES_GRATIS;
+    }
+
+    public void resetMensajesGratisEnviados() {
+        this.mensajesGratisEnviados = 0;
+    }
+
+    private void manejarMensajeAutenticado(String mensaje) throws IOException {
+        if (!mensaje.startsWith("@") && mensaje.trim().isEmpty()) {
+            enviarMensaje("Sistema: No puedes enviar un mensaje público vacío.");
+        } else {
+            Mensaje.procesar(mensaje, this);
         }
     }
 
-    private void Register(String nuevoNombre, String pin, String oldNombreCliente) throws IOException {
-        if (BDusuarios.UsuarioExistente(nuevoNombre)) {
-            enviarMensaje("Sistema: Error al registrar. El usuario '" + nuevoNombre + "' ya existe. Por favor, usa /login.");
-        } else {
-            if (BDusuarios.RegistrarUsuario(nuevoNombre, pin)) {
-                autenticacionExitosa(nuevoNombre, oldNombreCliente, nuevoNombre + " acaba de registrarse");
-                enviarMensaje("Sistema: ¡Registro exitoso! Tu nombre ahora es '" + nuevoNombre + "'. Puedes enviar mensajes ilimitados.");
+    private void inicializarCliente() throws IOException {
+        synchronized (ServidorMulti.clientes) {
+            ServidorMulti.anonimoCONT++;
+            nombreCliente = "anonimo" + ServidorMulti.anonimoCONT;
+        }
+
+        ServidorMulti.clientes.put(nombreCliente, this);
+        Mensaje.notificarATodos(nombreCliente + " se ha unido al chat como invitado.", this);
+    }
+
+    private void enviarMensajesDeBienvenida() throws IOException {
+        enviarMensaje("Sistema: Tu nombre actual es " + nombreCliente + ". Tienes un límite de " + LIMITE_MENSAJES_GRATIS + " mensajes antes de autenticarte.");
+        enviarMensaje("Sistema: Usa '/register <nombre_usuario> <PIN>' (Ej: /register Arturo 1234) o '/login <nombre_usuario> <PIN>'.");
+    }
+
+    private void bucleDeLectura() throws IOException {
+        while (true) {
+            String mensaje = entrada.readUTF();
+
+            if (mensaje.startsWith("/register") || mensaje.startsWith("/login")) {
+                autenticador.manejarAutenticacion(mensaje);
+                continue;
+            }
+
+            if (autenticado) {
+                manejarMensajeAutenticado(mensaje);
             } else {
-                enviarMensaje("Sistema: Error desconocido al registrar. Intenta de nuevo.");
+                controladorInvitado.manejarMensaje(mensaje);
             }
         }
     }
 
-    private void Login(String nuevoNombre, String pin, String oldNombreCliente) throws IOException {
-        if (!BDusuarios.UsuarioExistente(nuevoNombre)) {
-            enviarMensaje("Sistema: Error al iniciar sesión. El usuario '" + nuevoNombre + "' no está registrado. Por favor, usa /register.");
-        } else {
-            if (BDusuarios.AutenticarUsuario(nuevoNombre, pin)) {
-                autenticacionExitosa(nuevoNombre, oldNombreCliente, nuevoNombre + " ha iniciado sesion");
-                enviarMensaje("Sistema: ¡Inicio de sesión exitoso! Tu nombre ahora es '" + nuevoNombre + "'. Puedes enviar mensajes ilimitados.");
-            } else {
-                enviarMensaje("Sistema: PIN incorrecto para el usuario '" + nuevoNombre + "'.");
-            }
+    private void manejarDesconexion() {
+        if (nombreCliente != null) {
+            ServidorMulti.clientes.remove(nombreCliente);
+            Mensaje.notificarATodos(nombreCliente + " ha abandonado el chat.", null);
         }
     }
 
-    private void autenticacionExitosa(String nuevoNombre, String oldNombreCliente, String notificacion) {
-        ServidorMulti.clientes.remove(oldNombreCliente);
-        nombreCliente = nuevoNombre; // Establece el nuevo nombre
-        ServidorMulti.clientes.put(nombreCliente, this); // Añade con el nuevo nombre
-
-        autenticado = true;
-        mensajesGratisEnviados = 0;
-        Mensaje.notificarATodos(notificacion, this);
+    private void manejarErrorIO() {
+        System.out.println("Error de comunicación con " + (nombreCliente != null ? nombreCliente : "un cliente"));
+        if (nombreCliente != null) {
+            ServidorMulti.clientes.remove(nombreCliente);
+            Mensaje.notificarATodos(nombreCliente + " ha abandonado el chat.", null);
+        }
     }
 
     @Override
     public void run() {
         try {
-            synchronized (ServidorMulti.clientes) {
-                ServidorMulti.anonimoCONT++;
-                nombreCliente = "anonimo" + ServidorMulti.anonimoCONT;
-            }
-
-            ServidorMulti.clientes.put(nombreCliente, this);
-            Mensaje.notificarATodos(nombreCliente + " se ha unido al chat como invitado.", this);
-
-            enviarMensaje("Sistema: Tu nombre actual es " + nombreCliente + ". Tienes un límite de " + LIMITE_MENSAJES_GRATIS + " mensajes antes de autenticarte.");
-            enviarMensaje("Sistema: Usa '/register <nombre_usuario> <PIN>' (Ej: /register Arturo 1234) o '/login <nombre_usuario> <PIN>'.");
-            while (true) {
-                String mensaje = entrada.readUTF();
-                if (mensaje.startsWith("/register") || mensaje.startsWith("/login")) {
-                    // Llama al método refactorizado
-                    manejarAutenticacion(mensaje);
-                    continue;
-                }
-                if (autenticado) {
-                    if (!mensaje.startsWith("@") && mensaje.trim().isEmpty()) {
-                        enviarMensaje("Sistema: No puedes enviar un mensaje público vacío.");
-                    } else {
-                        Mensaje.procesar(mensaje, this);
-                    }
-                } else {
-                    if (mensajesGratisEnviados < LIMITE_MENSAJES_GRATIS) {
-
-                        boolean mensajeValido = false;
-                        if (!mensaje.startsWith("@") && mensaje.trim().isEmpty()) {
-                            enviarMensaje("Sistema: No puedes enviar un mensaje público vacío.");
-                        } else {
-                            mensajeValido = Mensaje.procesar(mensaje, this);
-                        }
-
-                        if (mensajeValido) {
-                            mensajesGratisEnviados++;
-                            int restantes = LIMITE_MENSAJES_GRATIS - mensajesGratisEnviados;
-                            if (restantes > 0) {
-                                enviarMensaje("Sistema: Mensaje enviado. Te quedan " + restantes + " mensajes gratis.");
-                            } else {
-                                enviarMensaje("Sistema: ¡ATENCIÓN! Has agotado tus mensajes gratis (" + LIMITE_MENSAJES_GRATIS + "). Por favor, usa '/login <nombre_usuario> <PIN>' o '/register <nombre_usuario> <PIN>' para continuar enviando.");
-                            }
-                        }
-                    } else {
-                        enviarMensaje("Sistema: No puedes enviar más mensajes. Debes usar '/login <nombre_usuario> <PIN>' o '/register <nombre_usuario> <PIN>' para continuar enviando.");
-                    }
-                }
-            }
+            inicializarCliente();
+            enviarMensajesDeBienvenida();
+            bucleDeLectura();
         } catch (SocketException e) {
-            if (nombreCliente != null) {
-                ServidorMulti.clientes.remove(nombreCliente);
-                Mensaje.notificarATodos(nombreCliente + " ha abandonado el chat.", null);
-            }
+            manejarDesconexion();
         } catch (IOException ex) {
-            System.out.println("Error de comunicación con " + (nombreCliente != null ? nombreCliente : "un cliente"));
-            if (nombreCliente != null) {
-                ServidorMulti.clientes.remove(nombreCliente);
-                Mensaje.notificarATodos(nombreCliente + " ha abandonado el chat.", null);
-            }
+            manejarErrorIO();
         }
     }
 }
