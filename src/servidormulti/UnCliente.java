@@ -31,6 +31,7 @@ public class UnCliente implements Runnable {
         String[] partes = comandoCompleto.split(" ");
         String comando = partes[0];
         String oldNombreCliente = nombreCliente;
+
         if (partes.length != 3) {
             enviarMensaje("Sistema: Formato incorrecto. Uso: " + comando + " <nombre_usuario> <PIN de 4 dígitos>");
             return;
@@ -55,41 +56,46 @@ public class UnCliente implements Runnable {
         }
 
         if (comando.equals("/register")) {
-            if (BDusuarios.UsuarioExistente(nuevoNombre)) {
-                enviarMensaje("Sistema: Error al registrar. El usuario '" + nuevoNombre + "' ya existe. Por favor, usa /login.");
-            } else {
-                if (BDusuarios.RegistrarUsuario(nuevoNombre, pin)) {
-                    ServidorMulti.clientes.remove(oldNombreCliente);
-                    nombreCliente = nuevoNombre; // Establece el nuevo nombre
-                    ServidorMulti.clientes.put(nombreCliente, this); // Añade con el nuevo nombre
-
-                    autenticado = true;
-                    mensajesGratisEnviados = 0;
-                    enviarMensaje("Sistema: ¡Registro exitoso! Tu nombre ahora es '" + nuevoNombre + "'. Puedes enviar mensajes ilimitados.");
-                    Mensaje.notificarATodos( nuevoNombre + " acaba de registrarse", this);
-                } else {
-                    enviarMensaje("Sistema: Error desconocido al registrar. Intenta de nuevo.");
-                }
-            }
-
+            Register(nuevoNombre, pin, oldNombreCliente);
         } else if (comando.equals("/login")) {
-            if (!BDusuarios.UsuarioExistente(nuevoNombre)) {
-                enviarMensaje("Sistema: Error al iniciar sesión. El usuario '" + nuevoNombre + "' no está registrado. Por favor, usa /register.");
-            } else {
-                if (BDusuarios.AutenticarUsuario(nuevoNombre, pin)) {
-                    ServidorMulti.clientes.remove(oldNombreCliente);
-                    nombreCliente = nuevoNombre;
-                    ServidorMulti.clientes.put(nombreCliente, this);
+            Login(nuevoNombre, pin, oldNombreCliente);
+        }
+    }
 
-                    autenticado = true;
-                    mensajesGratisEnviados = 0;
-                    enviarMensaje("Sistema: ¡Inicio de sesión exitoso! Tu nombre ahora es '" + nuevoNombre + "'. Puedes enviar mensajes ilimitados.");
-                    Mensaje.notificarATodos( nuevoNombre + " ha iniciado sesion", this);
-                } else {
-                    enviarMensaje("Sistema: PIN incorrecto para el usuario '" + nuevoNombre + "'.");
-                }
+    private void Register(String nuevoNombre, String pin, String oldNombreCliente) throws IOException {
+        if (BDusuarios.UsuarioExistente(nuevoNombre)) {
+            enviarMensaje("Sistema: Error al registrar. El usuario '" + nuevoNombre + "' ya existe. Por favor, usa /login.");
+        } else {
+            if (BDusuarios.RegistrarUsuario(nuevoNombre, pin)) {
+                autenticacionExitosa(nuevoNombre, oldNombreCliente, nuevoNombre + " acaba de registrarse");
+                enviarMensaje("Sistema: ¡Registro exitoso! Tu nombre ahora es '" + nuevoNombre + "'. Puedes enviar mensajes ilimitados.");
+            } else {
+                enviarMensaje("Sistema: Error desconocido al registrar. Intenta de nuevo.");
             }
         }
+    }
+
+    private void Login(String nuevoNombre, String pin, String oldNombreCliente) throws IOException {
+        if (!BDusuarios.UsuarioExistente(nuevoNombre)) {
+            enviarMensaje("Sistema: Error al iniciar sesión. El usuario '" + nuevoNombre + "' no está registrado. Por favor, usa /register.");
+        } else {
+            if (BDusuarios.AutenticarUsuario(nuevoNombre, pin)) {
+                autenticacionExitosa(nuevoNombre, oldNombreCliente, nuevoNombre + " ha iniciado sesion");
+                enviarMensaje("Sistema: ¡Inicio de sesión exitoso! Tu nombre ahora es '" + nuevoNombre + "'. Puedes enviar mensajes ilimitados.");
+            } else {
+                enviarMensaje("Sistema: PIN incorrecto para el usuario '" + nuevoNombre + "'.");
+            }
+        }
+    }
+
+    private void autenticacionExitosa(String nuevoNombre, String oldNombreCliente, String notificacion) {
+        ServidorMulti.clientes.remove(oldNombreCliente);
+        nombreCliente = nuevoNombre; // Establece el nuevo nombre
+        ServidorMulti.clientes.put(nombreCliente, this); // Añade con el nuevo nombre
+
+        autenticado = true;
+        mensajesGratisEnviados = 0;
+        Mensaje.notificarATodos(notificacion, this);
     }
 
     @Override
@@ -108,6 +114,7 @@ public class UnCliente implements Runnable {
             while (true) {
                 String mensaje = entrada.readUTF();
                 if (mensaje.startsWith("/register") || mensaje.startsWith("/login")) {
+                    // Llama al método refactorizado
                     manejarAutenticacion(mensaje);
                     continue;
                 }
