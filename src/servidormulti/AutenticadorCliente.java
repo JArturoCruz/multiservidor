@@ -1,6 +1,8 @@
 package servidormulti;
 
 import java.io.IOException;
+
+import bd.BDusuarios;
 import mensaje.Mensaje;
 
 public class AutenticadorCliente {
