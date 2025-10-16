@@ -14,13 +14,16 @@ public class UnCliente implements Runnable {
     private boolean autenticado = false;
     private static final int LIMITE_MENSAJES_GRATIS = 3;
 
+    private final ServidorMulti servidor;
+
     private final AutenticadorCliente autenticador;
     private final ControladorMensajesInvitado controladorInvitado;
 
-    UnCliente(Socket s) throws IOException {
+    UnCliente(Socket s, ServidorMulti servidor) throws IOException {
         salida = new DataOutputStream(s.getOutputStream());
         entrada = new DataInputStream(s.getInputStream());
-        this.autenticador = new AutenticadorCliente(this);
+        this.servidor = servidor;
+        this.autenticador = new AutenticadorCliente(this, servidor);
         this.controladorInvitado = new ControladorMensajesInvitado(this);
     }
 
@@ -60,22 +63,20 @@ public class UnCliente implements Runnable {
         this.mensajesGratisEnviados = 0;
     }
 
+
     private void manejarMensajeAutenticado(String mensaje) throws IOException {
         if (!mensaje.startsWith("@") && mensaje.trim().isEmpty()) {
             enviarMensaje("Sistema: No puedes enviar un mensaje público vacío.");
         } else {
-            Mensaje.procesar(mensaje, this);
+            Mensaje.procesar(mensaje, this, servidor);
         }
     }
 
     private void inicializarCliente() throws IOException {
-        synchronized (ServidorMulti.clientes) {
-            ServidorMulti.anonimoCONT++;
-            nombreCliente = "anonimo" + ServidorMulti.anonimoCONT;
-        }
+        nombreCliente = servidor.generarNombreAnonimo();
+        servidor.agregarCliente(nombreCliente, this);
 
-        ServidorMulti.clientes.put(nombreCliente, this);
-        Mensaje.notificarATodos(nombreCliente + " se ha unido al chat como invitado.", this);
+        Mensaje.notificarATodos(nombreCliente + " se ha unido al chat como invitado.", this, servidor);
     }
 
     private void enviarMensajesDeBienvenida() throws IOException {
@@ -95,24 +96,20 @@ public class UnCliente implements Runnable {
             if (autenticado) {
                 manejarMensajeAutenticado(mensaje);
             } else {
-                controladorInvitado.manejarMensaje(mensaje);
+                controladorInvitado.manejarMensaje(mensaje, servidor);
             }
         }
     }
 
     private void manejarDesconexion() {
         if (nombreCliente != null) {
-            ServidorMulti.clientes.remove(nombreCliente);
-            Mensaje.notificarATodos(nombreCliente + " ha abandonado el chat.", null);
+            servidor.removerCliente(nombreCliente);
+            Mensaje.notificarATodos(nombreCliente + " ha abandonado el chat.", null, servidor);
         }
     }
 
     private void manejarErrorIO() {
         System.out.println("Error de comunicación con " + (nombreCliente != null ? nombreCliente : "un cliente"));
-        if (nombreCliente != null) {
-            ServidorMulti.clientes.remove(nombreCliente);
-            Mensaje.notificarATodos(nombreCliente + " ha abandonado el chat.", null);
-        }
     }
 
     @Override
@@ -122,9 +119,11 @@ public class UnCliente implements Runnable {
             enviarMensajesDeBienvenida();
             bucleDeLectura();
         } catch (SocketException e) {
-            manejarDesconexion();
+            System.out.println(nombreCliente + " se ha desconectado (SocketException).");
         } catch (IOException ex) {
             manejarErrorIO();
+        } finally {
+            manejarDesconexion();
         }
     }
 }

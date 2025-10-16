@@ -8,10 +8,13 @@ import mensaje.Mensaje;
 public class AutenticadorCliente {
 
     private final UnCliente cliente;
+    private final ServidorMulti servidor;
 
-    public AutenticadorCliente(UnCliente cliente) {
+    public AutenticadorCliente(UnCliente cliente, ServidorMulti servidor) {
         this.cliente = cliente;
+        this.servidor = servidor;
     }
+
 
     private boolean validarArgumentos(String[] partes, String comando) throws IOException {
         if (partes.length != 3) {
@@ -42,24 +45,24 @@ public class AutenticadorCliente {
     }
 
     private void autenticacionExitosa(String nuevoNombre, String oldNombreCliente, String notificacion) {
-        ServidorMulti.clientes.remove(oldNombreCliente);
+        servidor.removerCliente(oldNombreCliente);
         cliente.setNombreCliente(nuevoNombre);
-        ServidorMulti.clientes.put(nuevoNombre, cliente);
+        servidor.agregarCliente(nuevoNombre, cliente);
 
         cliente.setAutenticado(true);
         cliente.resetMensajesGratisEnviados();
-        Mensaje.notificarATodos(notificacion, cliente);
+        Mensaje.notificarATodos(notificacion, cliente, servidor);
     }
 
     private void manejarRegistro(String nuevoNombre, String pin, String oldNombreCliente) throws IOException {
         if (BDusuarios.UsuarioExistente(nuevoNombre)) {
-            cliente.enviarMensaje("Sistema: Error al registrar. El usuario '" + nuevoNombre + "' ya existe. Por favor, usa /login.");
+            cliente.enviarMensaje("Sistema: Error al registrar. El usuario '" + nuevoNombre + "' ya existe. Usa /login.");
         } else {
             if (BDusuarios.RegistrarUsuario(nuevoNombre, pin)) {
                 autenticacionExitosa(nuevoNombre, oldNombreCliente, nuevoNombre + " acaba de registrarse");
-                cliente.enviarMensaje("Sistema: ¡Registro exitoso! Tu nombre ahora es '" + nuevoNombre + "'. Puedes enviar mensajes ilimitados.");
+                cliente.enviarMensaje("Sistema:Registro completado Tu nombre ahora es '" + nuevoNombre + "'. Puedes enviar mensajes ilimitados.");
             } else {
-                cliente.enviarMensaje("Sistema: Error desconocido al registrar. Intenta de nuevo.");
+                cliente.enviarMensaje("Sistema: Error al registrar. Intenta de nuevo.");
             }
         }
     }
@@ -70,7 +73,7 @@ public class AutenticadorCliente {
         } else {
             if (BDusuarios.AutenticarUsuario(nuevoNombre, pin)) {
                 autenticacionExitosa(nuevoNombre, oldNombreCliente, nuevoNombre + " ha iniciado sesion");
-                cliente.enviarMensaje("Sistema: ¡Inicio de sesión exitoso! Tu nombre ahora es '" + nuevoNombre + "'. Puedes enviar mensajes ilimitados.");
+                cliente.enviarMensaje("Sistema:Inicio de sesión exitoso, tu nombre ahora es '" + nuevoNombre + "'. Puedes enviar mensajes ilimitados.");
             } else {
                 cliente.enviarMensaje("Sistema: PIN incorrecto para el usuario '" + nuevoNombre + "'.");
             }

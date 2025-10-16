@@ -14,12 +14,12 @@ public class Mensaje {
         return "(Mensaje privado para " + destinatarios + "): " + contenido;
     }
 
-    public static boolean procesar(String mensaje, UnCliente remitente) throws IOException {
+    public static boolean procesar(String mensaje, UnCliente remitente, ServidorMulti servidor) throws IOException {
         if (mensaje.startsWith("@")) {
-            return enviarMensajePrivado(mensaje, remitente);
+            return enviarMensajePrivado(mensaje, remitente, servidor);
         } else {
-            difundirMensajePublico(mensaje, remitente);
-            return ServidorMulti.clientes.size() > 1;
+            difundirMensajePublico(mensaje, remitente, servidor);
+            return servidor.getTodosLosClientes().size() > 1;
         }
     }
 
@@ -31,13 +31,12 @@ public class Mensaje {
         return true;
     }
 
-    private static void enviarAClientes(UnCliente remitente, String destinatariosStr, String mensajeParaDestinatarios) throws IOException {
+    private static void enviarAClientes(UnCliente remitente, String destinatariosStr, String mensajeParaDestinatarios, ServidorMulti servidor) throws IOException {
         String[] destinatarios = destinatariosStr.split(",");
 
         for (String dest : destinatarios) {
             String nombreDestinatario = dest.trim();
-            UnCliente clienteDestino = ServidorMulti.clientes.get(nombreDestinatario);
-
+            UnCliente clienteDestino = servidor.getCliente(nombreDestinatario);
             if (clienteDestino != null) {
                 clienteDestino.enviarMensaje(mensajeParaDestinatarios);
             } else {
@@ -46,7 +45,7 @@ public class Mensaje {
         }
     }
 
-    private static boolean enviarMensajePrivado(String mensajeCompleto, UnCliente remitente) throws IOException {
+    private static boolean enviarMensajePrivado(String mensajeCompleto, UnCliente remitente, ServidorMulti servidor) throws IOException {
         String[] partes = mensajeCompleto.split(" ", 2);
         String destinatariosStr = partes[0].substring(1);
         String mensajePrivado = (partes.length > 1) ? partes[1] : "";
@@ -55,7 +54,7 @@ public class Mensaje {
 
         String mensajeParaDestinatarios = formatearMensajePrivado(remitente.getNombreCliente(), mensajePrivado);
 
-        enviarAClientes(remitente, destinatariosStr, mensajeParaDestinatarios);
+        enviarAClientes(remitente, destinatariosStr, mensajeParaDestinatarios, servidor);
 
         String mensajeConfirmacion = formatearConfirmacionPrivada(destinatariosStr, mensajePrivado);
         remitente.enviarMensaje(mensajeConfirmacion);
@@ -63,17 +62,17 @@ public class Mensaje {
         return true;
     }
 
-    private static void difundirMensajePublico(String mensaje, UnCliente remitente) throws IOException {
+    private static void difundirMensajePublico(String mensaje, UnCliente remitente, ServidorMulti servidor) throws IOException {
         String mensajeCompleto = remitente.getNombreCliente() + ": " + mensaje;
-        for (UnCliente cliente : ServidorMulti.clientes.values()) {
+        for (UnCliente cliente : servidor.getTodosLosClientes()) {
             if (cliente != remitente) {
                 cliente.enviarMensaje(mensajeCompleto);
             }
         }
     }
 
-    private static void iterarYNotificar(String notificacion, UnCliente clienteExcluido) {
-        for (UnCliente cliente : ServidorMulti.clientes.values()) {
+    private static void iterarYNotificar(String notificacion, UnCliente clienteExcluido, ServidorMulti servidor) {
+        for (UnCliente cliente : servidor.getTodosLosClientes()) {
             try {
                 if (cliente != clienteExcluido) {
                     cliente.enviarMensaje("Sistema: " + notificacion);
@@ -83,8 +82,8 @@ public class Mensaje {
         }
     }
 
-    public static void notificarATodos(String notificacion, UnCliente clienteExcluido) {
+    public static void notificarATodos(String notificacion, UnCliente clienteExcluido, ServidorMulti servidor) {
         System.out.println(notificacion);
-        iterarYNotificar(notificacion, clienteExcluido);
+        iterarYNotificar(notificacion, clienteExcluido, servidor);
     }
 }

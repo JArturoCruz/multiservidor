@@ -30,11 +30,11 @@ public class ControladorMensajesInvitado {
         if (restantes > 0) {
             cliente.enviarMensaje("Sistema: Mensaje enviado. Te quedan " + restantes + " mensajes gratis.");
         } else {
-            cliente.enviarMensaje("Sistema: ¡ATENCIÓN! Has agotado tus mensajes gratis (" + cliente.getLimiteMensajesGratis() + "). Por favor, usa '/login <nombre_usuario> <PIN>' o '/register <nombre_usuario> <PIN>' para continuar enviando.");
+            cliente.enviarMensaje("Sistema:Has agotado tus mensajes gratis (" + cliente.getLimiteMensajesGratis() + "). Por favor, usa '/login <nombre_usuario> <PIN>' o '/register <nombre_usuario> <PIN>' para continuar enviando.");
         }
     }
 
-    public void manejarMensaje(String mensaje) throws IOException {
+    public void manejarMensaje(String mensaje, ServidorMulti servidor) throws IOException {
         if (cliente.getMensajesGratisEnviados() >= cliente.getLimiteMensajesGratis()) {
             notificarLimiteAgotado();
             return;
@@ -42,7 +42,7 @@ public class ControladorMensajesInvitado {
 
         if (!validarMensajeVacio(mensaje)) return;
 
-        boolean mensajeValido = Mensaje.procesar(mensaje, cliente);
+        boolean mensajeValido = Mensaje.procesar(mensaje, cliente, servidor);
 
         if (mensajeValido) {
             manejarContadorMensajesGratis();
