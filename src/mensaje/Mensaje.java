@@ -1,7 +1,7 @@
 package mensaje ;
 import servidormulti.ServidorMulti;
 import servidormulti.UnCliente;
-import bd.BDusuarios;
+import bd.BDusuarios; // NUEVO: Importar BDusuarios
 
 import java.io.IOException;
 
@@ -23,6 +23,7 @@ public class Mensaje {
             return servidor.getTodosLosClientes().size() > 1;
         }
     }
+
     private static boolean validarMensajePrivado(String mensajePrivado, UnCliente remitente) throws IOException {
         if (mensajePrivado.isEmpty()) {
             remitente.enviarMensaje("Sistema: No puedes enviar un mensaje privado vacío.");
@@ -47,12 +48,13 @@ public class Mensaje {
 
                 if (bloqueadoPorDestino || bloqueadoPorRemitente) {
                     String razon = bloqueadoPorDestino ?
-                            "Te ha bloqueado." :
-                            "Le has bloqueado.";
+                            "El usuario te tiene bloqueado." :
+                            "Tienes bloqueado al usuario.";
 
                     remitente.enviarMensaje("Sistema: Error al enviar mensaje privado a '" + nombreDestinatario + "'. " + razon);
                     continue;
                 }
+
                 clienteDestino.enviarMensaje(mensajeParaDestinatarios);
                 if (destinatariosEnviados.length() > 0) destinatariosEnviados.append(", ");
                 destinatariosEnviados.append(nombreDestinatario);
@@ -83,6 +85,7 @@ public class Mensaje {
     private static void difundirMensajePublico(String mensaje, UnCliente remitente, ServidorMulti servidor) throws IOException {
         String remitenteNombre = remitente.getNombreCliente();
         String mensajeCompleto = remitenteNombre + ": " + mensaje;
+
         remitente.enviarMensaje("(Mensaje público enviado)");
 
         for (UnCliente cliente : servidor.getTodosLosClientes()) {
@@ -90,9 +93,11 @@ public class Mensaje {
                 String clienteNombre = cliente.getNombreCliente();
                 boolean bloqueadoPorReceptor = BDusuarios.estaBloqueado(clienteNombre, remitenteNombre);
                 boolean bloqueadoPorRemitente = BDusuarios.estaBloqueado(remitenteNombre, clienteNombre);
+
                 if (bloqueadoPorReceptor || bloqueadoPorRemitente) {
                     continue;
                 }
+
                 cliente.enviarMensaje(mensajeCompleto);
             }
         }
