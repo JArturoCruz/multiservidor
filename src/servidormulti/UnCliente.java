@@ -18,6 +18,7 @@ public class UnCliente implements Runnable {
 
     private final AutenticadorCliente autenticador;
     private final ControladorMensajesInvitado controladorInvitado;
+    private final ControladorBloqueo controladorBloqueo;
 
     UnCliente(Socket s, ServidorMulti servidor) throws IOException {
         salida = new DataOutputStream(s.getOutputStream());
@@ -25,6 +26,7 @@ public class UnCliente implements Runnable {
         this.servidor = servidor;
         this.autenticador = new AutenticadorCliente(this, servidor);
         this.controladorInvitado = new ControladorMensajesInvitado(this);
+        this.controladorBloqueo = new ControladorBloqueo(this);
     }
 
     public void enviarMensaje(String mensaje) throws IOException {
@@ -82,11 +84,17 @@ public class UnCliente implements Runnable {
     private void enviarMensajesDeBienvenida() throws IOException {
         enviarMensaje("Sistema: Tu nombre actual es " + nombreCliente + ". Tienes un límite de " + LIMITE_MENSAJES_GRATIS + " mensajes antes de autenticarte.");
         enviarMensaje("Sistema: Usa '/register <nombre_usuario> <PIN>' (Ej: /register Arturo 1234) o '/login <nombre_usuario> <PIN>'.");
+        enviarMensaje("Sistema: Usa '/block <usuario>' y '/unblock <usuario>' para gestionar bloqueos (requiere estar autenticado).");
     }
 
     private void bucleDeLectura() throws IOException {
         while (true) {
             String mensaje = entrada.readUTF();
+
+            if (mensaje.startsWith("/block") || mensaje.startsWith("/unblock")) {
+                controladorBloqueo.manejarComando(mensaje);
+                continue;
+            }
 
             if (mensaje.startsWith("/register") || mensaje.startsWith("/login")) {
                 autenticador.manejarAutenticacion(mensaje);

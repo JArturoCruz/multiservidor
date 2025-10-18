@@ -1,6 +1,7 @@
 package mensaje ;
 import servidormulti.ServidorMulti;
 import servidormulti.UnCliente;
+import bd.BDusuarios; // NUEVO: Importar BDusuarios
 
 import java.io.IOException;
 
@@ -32,16 +33,38 @@ public class Mensaje {
     }
 
     private static void enviarAClientes(UnCliente remitente, String destinatariosStr, String mensajeParaDestinatarios, ServidorMulti servidor) throws IOException {
+        String remitenteNombre = remitente.getNombreCliente();
         String[] destinatarios = destinatariosStr.split(",");
+        StringBuilder destinatariosEnviados = new StringBuilder();
+        boolean alMenosUnoEnviado = false;
 
         for (String dest : destinatarios) {
             String nombreDestinatario = dest.trim();
             UnCliente clienteDestino = servidor.getCliente(nombreDestinatario);
+
             if (clienteDestino != null) {
+                // LÓGICA DE BLOQUEO EN MENSAJES PRIVADOS: Destinatario (A) bloquea a Remitente (B)
+                if (BDusuarios.estaBloqueado(nombreDestinatario, remitenteNombre)) {
+                    // Notificar al remitente (B) que no se pudo enviar
+                    remitente.enviarMensaje("Sistema: Error al enviar mensaje privado a '" + nombreDestinatario + "'. Te ha bloqueado.");
+                    continue; // Saltar a la siguiente iteración
+                }
+
                 clienteDestino.enviarMensaje(mensajeParaDestinatarios);
+                if (destinatariosEnviados.length() > 0) destinatariosEnviados.append(", ");
+                destinatariosEnviados.append(nombreDestinatario);
+                alMenosUnoEnviado = true;
             } else {
                 remitente.enviarMensaje("Sistema: El usuario '" + nombreDestinatario + "' no está conectado o no existe.");
             }
+        }
+
+        // El mensaje de confirmación se envía solo si al menos a un cliente se le pudo enviar el mensaje
+        if (alMenosUnoEnviado) {
+            // Extraer solo el contenido del mensaje (se quita el prefijo "(Privado de ...): ")
+            String contenidoMensaje = mensajeParaDestinatarios.substring(mensajeParaDestinatarios.indexOf("): ") + 3);
+            String mensajeConfirmacion = formatearConfirmacionPrivada(destinatariosEnviados.toString(), contenidoMensaje);
+            remitente.enviarMensaje(mensajeConfirmacion);
         }
     }
 
@@ -54,18 +77,26 @@ public class Mensaje {
 
         String mensajeParaDestinatarios = formatearMensajePrivado(remitente.getNombreCliente(), mensajePrivado);
 
+        // La lógica de envío y confirmación ahora está centralizada en enviarAClientes
         enviarAClientes(remitente, destinatariosStr, mensajeParaDestinatarios, servidor);
-
-        String mensajeConfirmacion = formatearConfirmacionPrivada(destinatariosStr, mensajePrivado);
-        remitente.enviarMensaje(mensajeConfirmacion);
 
         return true;
     }
 
     private static void difundirMensajePublico(String mensaje, UnCliente remitente, ServidorMulti servidor) throws IOException {
-        String mensajeCompleto = remitente.getNombreCliente() + ": " + mensaje;
+        String remitenteNombre = remitente.getNombreCliente();
+        String mensajeCompleto = remitenteNombre + ": " + mensaje;
+
+        // Notificación al remitente (B) de que su mensaje ha sido enviado
+        remitente.enviarMensaje("(Mensaje público enviado)");
+
         for (UnCliente cliente : servidor.getTodosLosClientes()) {
             if (cliente != remitente) {
+                // LÓGICA DE BLOQUEO EN MENSAJES PÚBLICOS: Cliente Receptor (A) bloquea a Remitente (B)
+                if (BDusuarios.estaBloqueado(cliente.getNombreCliente(), remitenteNombre)) {
+                    continue; // No enviar el mensaje público al cliente que ha bloqueado al remitente.
+                }
+
                 cliente.enviarMensaje(mensajeCompleto);
             }
         }
