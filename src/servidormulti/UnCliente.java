@@ -19,6 +19,7 @@ public class UnCliente implements Runnable {
     private final AutenticadorCliente autenticador;
     private final ControladorMensajesInvitado controladorInvitado;
     private final ControladorBloqueo controladorBloqueo;
+    private final ControladorJuego controladorJuego;
 
     UnCliente(Socket s, ServidorMulti servidor) throws IOException {
         salida = new DataOutputStream(s.getOutputStream());
@@ -27,6 +28,7 @@ public class UnCliente implements Runnable {
         this.autenticador = new AutenticadorCliente(this, servidor);
         this.controladorInvitado = new ControladorMensajesInvitado(this);
         this.controladorBloqueo = new ControladorBloqueo(this);
+        this.controladorJuego = servidor.getControladorJuego();
     }
 
     public void enviarMensaje(String mensaje) throws IOException {
@@ -85,6 +87,10 @@ public class UnCliente implements Runnable {
         enviarMensaje("Sistema: Tu nombre actual es " + nombreCliente + ". Tienes un límite de " + LIMITE_MENSAJES_GRATIS + " mensajes antes de autenticarte.");
         enviarMensaje("Sistema: Usa '/register <nombre_usuario> <PIN>' (Ej: /register Arturo 1234) o '/login <nombre_usuario> <PIN>'.");
         enviarMensaje("Sistema: Usa '/block <usuario>' y '/unblock <usuario>' para gestionar bloqueos (requiere estar autenticado).");
+        enviarMensaje("Sistema: Juega al Gato con usuarios autenticados:");
+        enviarMensaje("Sistema: - Proponer juego: /gato <usuario>");
+        enviarMensaje("Sistema: - Responder propuesta: /accept <usuario> o /reject <usuario>");
+        enviarMensaje("Sistema: - Mover: /move <fila> <columna> (ej: /move 1 3)");
     }
 
     private void bucleDeLectura() throws IOException {
@@ -98,6 +104,11 @@ public class UnCliente implements Runnable {
 
             if (mensaje.startsWith("/register") || mensaje.startsWith("/login")) {
                 autenticador.manejarAutenticacion(mensaje);
+                continue;
+            }
+
+            if (mensaje.startsWith("/gato") || mensaje.startsWith("/accept") || mensaje.startsWith("/reject") || mensaje.startsWith("/move")) {
+                controladorJuego.manejarComando(mensaje, this);
                 continue;
             }
 

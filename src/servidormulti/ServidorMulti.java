@@ -12,6 +12,12 @@ public class ServidorMulti {
     private final Map<String, UnCliente> clientes = new HashMap<>();
     private int anonimoCONT = 0;
 
+    private final ControladorJuego controladorJuego;
+
+    public ServidorMulti() {
+        this.controladorJuego = new ControladorJuego(this);
+    }
+
     public void agregarCliente(String nombre, UnCliente cliente) {
         synchronized (clientes) {
             clientes.put(nombre, cliente);
@@ -19,9 +25,18 @@ public class ServidorMulti {
     }
 
     public void removerCliente(String nombre) {
+        UnCliente clienteRemovido;
         synchronized (clientes) {
-            clientes.remove(nombre);
+            clienteRemovido = clientes.remove(nombre);
         }
+
+        if (clienteRemovido != null) {
+            try {
+                controladorJuego.finalizarPorDesconexion(clienteRemovido);
+            } catch (IOException e) {
+            }
+        }
+
         System.out.println("Cliente removido: " + nombre + ". Clientes conectados: " + clientes.size());
     }
 
@@ -31,6 +46,10 @@ public class ServidorMulti {
 
     public Collection<UnCliente> getTodosLosClientes() {
         return clientes.values();
+    }
+
+    public ControladorJuego getControladorJuego() {
+        return controladorJuego;
     }
 
     public synchronized String generarNombreAnonimo() {
