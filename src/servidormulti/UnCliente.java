@@ -69,6 +69,28 @@ public class UnCliente implements Runnable {
 
 
     private void manejarMensajeAutenticado(String mensaje) throws IOException {
+        if (mensaje.trim().isEmpty()) {
+            enviarMensaje("Sistema: No puedes enviar un mensaje vacío.");
+            return;
+        }
+
+        String oponenteNombre = controladorJuego.getOponenteSiEstaJugando(nombreCliente);
+
+        if (oponenteNombre != null) {
+            if (mensaje.startsWith("/") || mensaje.startsWith("@")) {
+                enviarMensaje("Sistema: Estás en una partida de Gato. Solo se permite chat simple con el oponente o el comando /move.");
+                return;
+            }
+
+            Mensaje.enviarMensajePrivadoEntreJugadores(mensaje, this, oponenteNombre, servidor);
+            return;
+        }
+
+        if (mensaje.startsWith("/")) {
+            enviarMensaje("Sistema: Comando no reconocido o reservado.");
+            return;
+        }
+
         if (!mensaje.startsWith("@") && mensaje.trim().isEmpty()) {
             enviarMensaje("Sistema: No puedes enviar un mensaje público vacío.");
         } else {

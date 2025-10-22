@@ -1,7 +1,7 @@
 package mensaje ;
 import servidormulti.ServidorMulti;
 import servidormulti.UnCliente;
-import bd.BDusuarios; // NUEVO: Importar BDusuarios
+import bd.BDusuarios;
 
 import java.io.IOException;
 
@@ -21,6 +21,21 @@ public class Mensaje {
         } else {
             difundirMensajePublico(mensaje, remitente, servidor);
             return servidor.getTodosLosClientes().size() > 1;
+        }
+    }
+
+    public static void enviarMensajePrivadoEntreJugadores(String mensaje, UnCliente remitente, String nombreDestino, ServidorMulti servidor) throws IOException {
+        String remitenteNombre = remitente.getNombreCliente();
+        UnCliente clienteDestino = servidor.getCliente(nombreDestino);
+
+        if (clienteDestino != null) {
+            String mensajeParaDestinatarios = formatearMensajePrivado(remitenteNombre, mensaje);
+            clienteDestino.enviarMensaje(mensajeParaDestinatarios);
+
+            String mensajeConfirmacion = formatearConfirmacionPrivada(nombreDestino, mensaje);
+            remitente.enviarMensaje(mensajeConfirmacion);
+        } else {
+            remitente.enviarMensaje("Sistema: Error interno. El oponente (" + nombreDestino + ") no está conectado.");
         }
     }
 

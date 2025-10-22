@@ -26,6 +26,18 @@ public class ControladorJuego {
         return juegosActivos.get(nombre);
     }
 
+    public String getOponenteSiEstaJugando(String nombreCliente) {
+        JuegoGato juego = juegosActivos.get(nombreCliente);
+        if (juego != null) {
+            UnCliente cliente = servidor.getCliente(nombreCliente);
+            UnCliente oponente = juego.getContrincante(cliente);
+            if (oponente != null) {
+                return oponente.getNombreCliente();
+            }
+        }
+        return null;
+    }
+
     public void manejarComando(String mensaje, UnCliente remitente) throws IOException {
         if (!remitente.isAutenticado()) {
             remitente.enviarMensaje("Sistema Gato: Debes estar autenticado para jugar al Gato.");
