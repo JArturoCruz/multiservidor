@@ -38,6 +38,10 @@ public class ControladorJuego {
         return null;
     }
 
+    public boolean tieneInvitacionPendiente(String nombreCliente) {
+        return propuestasPendientes.containsValue(nombreCliente);
+    }
+
     public void manejarComando(String mensaje, UnCliente remitente) throws IOException {
         if (!remitente.isAutenticado()) {
             remitente.enviarMensaje("Sistema Gato: Debes estar autenticado para jugar al Gato.");
@@ -104,7 +108,7 @@ public class ControladorJuego {
             return;
         }
 
-        if (tienePropuestaPendiente(proponenteNombre, nombreDestino)) {
+        if (tienePropuestaPendiente(proponenteNombre, nombreDestino) || tieneInvitacionPendiente(proponenteNombre) || tieneInvitacionPendiente(nombreDestino)) {
             proponente.enviarMensaje("Sistema Gato: Ya tienes una propuesta pendiente (enviada o recibida) con " + nombreDestino + ".");
             return;
         }

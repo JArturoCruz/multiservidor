@@ -119,18 +119,30 @@ public class UnCliente implements Runnable {
         while (true) {
             String mensaje = entrada.readUTF();
 
-            if (mensaje.startsWith("/block") || mensaje.startsWith("/unblock")) {
+            String comando = mensaje.split(" ", 2)[0];
+            boolean esComandoJuegoRespuesta = comando.equals("/accept") || comando.equals("/reject");
+
+            if (autenticado && controladorJuego.tieneInvitacionPendiente(nombreCliente)) {
+                if (esComandoJuegoRespuesta) {
+                    controladorJuego.manejarComando(mensaje, this);
+                } else {
+                    enviarMensaje("Sistema: Tienes una invitación pendiente para jugar al Gato. Debes usar /accept <usuario> o /reject <usuario> para responder antes de realizar cualquier otra acción.");
+                }
+                continue;
+            }
+
+            if (comando.equals("/gato") || comando.equals("/move") || esComandoJuegoRespuesta) {
+                controladorJuego.manejarComando(mensaje, this);
+                continue;
+            }
+
+            if (comando.equals("/block") || comando.equals("/unblock")) {
                 controladorBloqueo.manejarComando(mensaje);
                 continue;
             }
 
-            if (mensaje.startsWith("/register") || mensaje.startsWith("/login")) {
+            if (comando.equals("/register") || comando.equals("/login")) {
                 autenticador.manejarAutenticacion(mensaje);
-                continue;
-            }
-
-            if (mensaje.startsWith("/gato") || mensaje.startsWith("/accept") || mensaje.startsWith("/reject") || mensaje.startsWith("/move")) {
-                controladorJuego.manejarComando(mensaje, this);
                 continue;
             }
 
