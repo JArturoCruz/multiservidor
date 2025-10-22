@@ -33,6 +33,7 @@ public class JuegoGato {
         }
 
         this.turnoActual = rand.nextBoolean() ? jugadorX : jugadorO;
+
         notificarInicio();
     }
 
@@ -73,13 +74,13 @@ public class JuegoGato {
 
     private boolean verificarGanador(EstadoCasilla simbolo) {
         for (int i = 0; i < 3; i++) {
-            if ((tablero[i][0] == simbolo && tablero[i][1] == simbolo && tablero[i][2] == simbolo) || // Fila
-                    (tablero[0][i] == simbolo && tablero[1][i] == simbolo && tablero[2][i] == simbolo)) { // Columna
+            if ((tablero[i][0] == simbolo && tablero[i][1] == simbolo && tablero[i][2] == simbolo) ||
+                    (tablero[0][i] == simbolo && tablero[1][i] == simbolo && tablero[2][i] == simbolo)) {
                 return true;
             }
         }
-        if ((tablero[0][0] == simbolo && tablero[1][1] == simbolo && tablero[2][2] == simbolo) || // Diag. principal
-                (tablero[0][2] == simbolo && tablero[1][1] == simbolo && tablero[2][0] == simbolo)) { // Diag. secundaria
+        if ((tablero[0][0] == simbolo && tablero[1][1] == simbolo && tablero[2][2] == simbolo) ||
+                (tablero[0][2] == simbolo && tablero[1][1] == simbolo && tablero[2][0] == simbolo)) {
             return true;
         }
         return false;
@@ -158,7 +159,7 @@ public class JuegoGato {
     }
 
     public void finalizarPorAbandono(UnCliente desconectado) throws IOException {
-        if (estado != EstadoJuego.ACTIVO) return; // Ya terminó
+        if (estado != EstadoJuego.ACTIVO) return;
 
         estado = EstadoJuego.ABANDONO;
         UnCliente oponente = getContrincante(desconectado);

@@ -1,6 +1,7 @@
 package servidormulti;
 
 import juego.JuegoGato;
+import bd.BDusuarios;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -57,6 +58,7 @@ public class ControladorJuego {
 
     private void proponerJuego(UnCliente proponente, String nombreDestino) throws IOException {
         String proponenteNombre = proponente.getNombreCliente();
+
         if (nombreDestino.isEmpty()) {
             proponente.enviarMensaje("Sistema Gato: Uso incorrecto. Usa /gato <usuario>");
             return;
@@ -70,6 +72,18 @@ public class ControladorJuego {
         UnCliente clienteDestino = servidor.getCliente(nombreDestino);
         if (clienteDestino == null || !clienteDestino.isAutenticado()) {
             proponente.enviarMensaje("Sistema Gato: El usuario '" + nombreDestino + "' no está conectado o no está autenticado.");
+            return;
+        }
+
+        boolean bloqueadoPorDestino = BDusuarios.estaBloqueado(nombreDestino, proponenteNombre);
+        boolean bloqueadoPorRemitente = BDusuarios.estaBloqueado(proponenteNombre, nombreDestino);
+
+        if (bloqueadoPorDestino || bloqueadoPorRemitente) {
+            String razon = bloqueadoPorDestino ?
+                    "El usuario te tiene bloqueado." :
+                    "Tienes bloqueado al usuario.";
+
+            proponente.enviarMensaje("Sistema Gato: Error al proponer juego a '" + nombreDestino + "'. " + razon + " No puedes jugar con alguien con quien tienes un bloqueo activo.");
             return;
         }
 
@@ -90,8 +104,8 @@ public class ControladorJuego {
     }
 
     private boolean tienePropuestaPendiente(String nombre1, String nombre2) {
-        if (propuestasPendientes.getOrDefault(nombre1, "").equals(nombre2)) return true; // 1 -> 2
-        if (propuestasPendientes.getOrDefault(nombre2, "").equals(nombre1)) return true; // 2 -> 1
+        if (propuestasPendientes.getOrDefault(nombre1, "").equals(nombre2)) return true;
+        if (propuestasPendientes.getOrDefault(nombre2, "").equals(nombre1)) return true;
         return false;
     }
 
@@ -190,7 +204,9 @@ public class ControladorJuego {
         if (juego != null) {
             UnCliente oponente = juego.getContrincante(desconectado);
             String nombreOponente = oponente.getNombreCliente();
+
             juego.finalizarPorAbandono(desconectado);
+
             removerJuego(nombreDesconectado, nombreOponente);
         }
 
