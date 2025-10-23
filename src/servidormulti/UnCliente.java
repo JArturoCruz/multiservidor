@@ -67,22 +67,16 @@ public class UnCliente implements Runnable {
         this.mensajesGratisEnviados = 0;
     }
 
-
     private void manejarMensajeAutenticado(String mensaje) throws IOException {
+        String oponenteNombre = controladorJuego.getOponenteSiEstaJugando(nombreCliente);
+
         if (mensaje.trim().isEmpty()) {
             enviarMensaje("Sistema: No puedes enviar un mensaje vacío.");
             return;
         }
 
-        String oponenteNombre = controladorJuego.getOponenteSiEstaJugando(nombreCliente);
-
         if (oponenteNombre != null) {
-            if (mensaje.startsWith("@")) {
-                Mensaje.procesar(mensaje, this, servidor);
-                return;
-            }
-
-            Mensaje.enviarMensajePrivadoEntreJugadores(mensaje, this, oponenteNombre, servidor);
+            manejarChatEnJuego(mensaje, oponenteNombre);
             return;
         }
 
@@ -94,10 +88,17 @@ public class UnCliente implements Runnable {
         Mensaje.procesar(mensaje, this, servidor);
     }
 
+    private void manejarChatEnJuego(String mensaje, String oponenteNombre) throws IOException {
+        if (mensaje.startsWith("@")) {
+            Mensaje.procesar(mensaje, this, servidor);
+        } else {
+            Mensaje.enviarMensajePrivadoEntreJugadores(mensaje, this, oponenteNombre, servidor);
+        }
+    }
+
     private void inicializarCliente() throws IOException {
         nombreCliente = servidor.generarNombreAnonimo();
         servidor.agregarCliente(nombreCliente, this);
-
         Mensaje.notificarATodos(nombreCliente + " se ha unido al chat como invitado.", this, servidor);
     }
 
@@ -114,54 +115,62 @@ public class UnCliente implements Runnable {
     private void bucleDeLectura() throws IOException {
         while (true) {
             String mensaje = entrada.readUTF();
-            String comando = mensaje.split(" ", 2)[0];
+            procesarMensaje(mensaje);
+        }
+    }
 
-            if (comando.equals("/register") || comando.equals("/login")) {
-                autenticador.manejarAutenticacion(mensaje);
-                continue;
-            }
+    private void procesarMensaje(String mensaje) throws IOException {
+        String comando = mensaje.split(" ", 2)[0];
 
-            if (autenticado) {
+        if (comando.equals("/register") || comando.equals("/login")) {
+            autenticador.manejarAutenticacion(mensaje);
+        } else if (autenticado) {
+            procesarMensajeAutenticado(mensaje, comando);
+        } else {
+            controladorInvitado.manejarMensaje(mensaje, servidor);
+        }
+    }
 
-                boolean isPlaying = controladorJuego.getOponenteSiEstaJugando(nombreCliente) != null;
-                boolean hasInvitation = controladorJuego.tieneInvitacionPendiente(nombreCliente);
+    private void procesarMensajeAutenticado(String mensaje, String comando) throws IOException {
+        boolean hasInvitation = controladorJuego.tieneInvitacionPendiente(nombreCliente);
+        boolean isPlaying = controladorJuego.getOponenteSiEstaJugando(nombreCliente) != null;
 
-                if (hasInvitation) {
-                    boolean esComandoJuegoRespuesta = comando.equals("/accept") || comando.equals("/reject");
-                    if (esComandoJuegoRespuesta) {
-                        controladorJuego.manejarComando(mensaje, this);
-                    } else {
-                        enviarMensaje("Sistema: Tienes una invitación pendiente para jugar al Gato. Debes usar /accept <usuario> o /reject <usuario> para responder antes de realizar cualquier otra acción.");
-                    }
-                    continue;
-                }
+        if (hasInvitation) {
+            manejarInvitacionPendiente(mensaje, comando);
+        } else if (isPlaying) {
+            manejarAccionEnJuego(mensaje, comando);
+        } else {
+            manejarAccionChat(mensaje, comando);
+        }
+    }
 
-                if (isPlaying) {
-                    if (comando.equals("/move")) {
-                        controladorJuego.manejarComando(mensaje, this);
-                    } else if (comando.startsWith("/")) {
-                        enviarMensaje("Sistema: Estás en una partida de Gato. Solo se permite /move o enviar mensajes a tu oponente o mensajes privados (@otro). Las acciones de chat control (/block, /unblock) y otros comandos de juego están bloqueados.");
-                    } else {
-                        manejarMensajeAutenticado(mensaje);
-                    }
-                    continue;
-                }
+    private void manejarInvitacionPendiente(String mensaje, String comando) throws IOException {
+        boolean esRespuestaJuego = comando.equals("/accept") || comando.equals("/reject");
 
-                if (comando.equals("/block") || comando.equals("/unblock")) {
-                    controladorBloqueo.manejarComando(mensaje);
-                    continue;
-                }
+        if (esRespuestaJuego) {
+            controladorJuego.manejarComando(mensaje, this);
+        } else {
+            enviarMensaje("Sistema: Tienes una invitación pendiente para jugar al Gato. Debes responder antes de realizar cualquier otra acción.");
+        }
+    }
 
-                if (comando.equals("/gato") || comando.equals("/accept") || comando.equals("/reject") || comando.equals("/move")) {
-                    controladorJuego.manejarComando(mensaje, this);
-                    continue;
-                }
+    private void manejarAccionEnJuego(String mensaje, String comando) throws IOException {
+        if (comando.equals("/move")) {
+            controladorJuego.manejarComando(mensaje, this);
+        } else if (comando.startsWith("/")) {
+            enviarMensaje("Sistema: Estás en partida. Solo /move, chat con oponente o @privado.");
+        } else {
+            manejarMensajeAutenticado(mensaje);
+        }
+    }
 
-                manejarMensajeAutenticado(mensaje);
-
-            } else {
-                controladorInvitado.manejarMensaje(mensaje, servidor);
-            }
+    private void manejarAccionChat(String mensaje, String comando) throws IOException {
+        if (comando.equals("/block") || comando.equals("/unblock")) {
+            controladorBloqueo.manejarComando(mensaje);
+        } else if (comando.startsWith("/gato") || comando.equals("/accept") || comando.equals("/reject")) {
+            controladorJuego.manejarComando(mensaje, this);
+        } else {
+            manejarMensajeAutenticado(mensaje);
         }
     }
 
