@@ -15,26 +15,37 @@ public class JuegoGato {
     private EstadoJuego estado;
 
     public JuegoGato(UnCliente c1, UnCliente c2) throws IOException {
-        this.tablero = new EstadoCasilla[3][3];
+        this.tablero = inicializarTablero();
+        this.estado = EstadoJuego.ACTIVO;
+        UnCliente[] jugadores = asignarSimbolos(c1, c2);
+        this.jugadorX = jugadores[0];
+        this.jugadorO = jugadores[1];
+        this.turnoActual = asignarTurnoInicial(jugadores);
+        notificarInicio();
+    }
+
+    private EstadoCasilla[][] inicializarTablero() {
+        EstadoCasilla[][] t = new EstadoCasilla[3][3];
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
-                tablero[i][j] = EstadoCasilla.VACIO;
+                t[i][j] = EstadoCasilla.VACIO;
             }
         }
-        this.estado = EstadoJuego.ACTIVO;
+        return t;
+    }
 
+    private UnCliente[] asignarSimbolos(UnCliente c1, UnCliente c2) {
         Random rand = new Random();
         if (rand.nextBoolean()) {
-            this.jugadorX = c1;
-            this.jugadorO = c2;
+            return new UnCliente[]{c1, c2};
         } else {
-            this.jugadorX = c2;
-            this.jugadorO = c1;
+            return new UnCliente[]{c2, c1};
         }
+    }
 
-        this.turnoActual = rand.nextBoolean() ? jugadorX : jugadorO;
-
-        notificarInicio();
+    private UnCliente asignarTurnoInicial(UnCliente[] jugadores) {
+        Random rand = new Random();
+        return rand.nextBoolean() ? jugadores[0] : jugadores[1];
     }
 
     public UnCliente getJugadorX() { return jugadorX; }
@@ -58,32 +69,42 @@ public class JuegoGato {
         StringBuilder sb = new StringBuilder("\n  1 2 3\n");
         for (int i = 0; i < 3; i++) {
             sb.append((i + 1)).append(" ");
-            for (int j = 0; j < 3; j++) {
-                switch (tablero[i][j]) {
-                    case X: sb.append("X"); break;
-                    case O: sb.append("O"); break;
-                    case VACIO: sb.append("-"); break;
-                }
-                if (j < 2) sb.append("|");
-            }
-            sb.append("\n");
-            if (i < 2) sb.append("  -----\n");
+            dibujarFila(sb, i);
         }
         return sb.toString();
     }
 
+    private void dibujarFila(StringBuilder sb, int i) {
+        for (int j = 0; j < 3; j++) {
+            switch (tablero[i][j]) {
+                case X: sb.append("X"); break;
+                case O: sb.append("O"); break;
+                case VACIO: sb.append("-"); break;
+            }
+            if (j < 2) sb.append("|");
+        }
+        sb.append("\n");
+        if (i < 2) sb.append("  -----\n");
+    }
+
     private boolean verificarGanador(EstadoCasilla simbolo) {
         for (int i = 0; i < 3; i++) {
-            if ((tablero[i][0] == simbolo && tablero[i][1] == simbolo && tablero[i][2] == simbolo) ||
-                    (tablero[0][i] == simbolo && tablero[1][i] == simbolo && tablero[2][i] == simbolo)) {
-                return true;
-            }
+            if (verificarLinea(i, simbolo) || verificarColumna(i, simbolo)) return true;
         }
-        if ((tablero[0][0] == simbolo && tablero[1][1] == simbolo && tablero[2][2] == simbolo) ||
-                (tablero[0][2] == simbolo && tablero[1][1] == simbolo && tablero[2][0] == simbolo)) {
-            return true;
-        }
-        return false;
+        return verificarDiagonales(simbolo);
+    }
+
+    private boolean verificarLinea(int i, EstadoCasilla simbolo) {
+        return tablero[i][0] == simbolo && tablero[i][1] == simbolo && tablero[i][2] == simbolo;
+    }
+
+    private boolean verificarColumna(int i, EstadoCasilla simbolo) {
+        return tablero[0][i] == simbolo && tablero[1][i] == simbolo && tablero[2][i] == simbolo;
+    }
+
+    private boolean verificarDiagonales(EstadoCasilla simbolo) {
+        return (tablero[0][0] == simbolo && tablero[1][1] == simbolo && tablero[2][2] == simbolo) ||
+                (tablero[0][2] == simbolo && tablero[1][1] == simbolo && tablero[2][0] == simbolo);
     }
 
     private boolean verificarEmpate() {
@@ -101,7 +122,7 @@ public class JuegoGato {
         String infoX = jugadorX.getNombreCliente() + " (X)";
         String infoO = jugadorO.getNombreCliente() + " (O)";
         String mensajeGeneral = "Sistema Gato: ¡Juego iniciado! " + infoX + " vs " + infoO + ".\n";
-        String mensajeTurno = "Turno de " + turnoActual.getNombreCliente() + " (" + getSimbolo(turnoActual) + "). Usa /move <fila> <columna> (ej: /move 1 3)";
+        String mensajeTurno = "Turno de " + turnoActual.getNombreCliente() + " (" + getSimbolo(turnoActual) + "). Usa /move 1 3";
 
         jugadorX.enviarMensaje(mensajeGeneral + "Tú eres X." + dibujarTablero() + mensajeTurno);
         jugadorO.enviarMensaje(mensajeGeneral + "Tú eres O." + dibujarTablero() + mensajeTurno);
@@ -118,44 +139,54 @@ public class JuegoGato {
     }
 
     public boolean realizarMovimiento(UnCliente cliente, int fila, int columna) throws IOException {
+        if (!validarMovimiento(cliente, fila, columna)) return false;
+        realizarCambio(cliente, fila, columna);
+        if (verificarFinDeJuego(cliente, fila, columna)) return true;
+        cambiarTurnoYNotificar(cliente);
+        return false;
+    }
+
+    private boolean validarMovimiento(UnCliente cliente, int fila, int columna) throws IOException {
         if (cliente != turnoActual) {
             cliente.enviarMensaje("Sistema Gato: No es tu turno.");
             return false;
         }
-
         if (fila < 1 || fila > 3 || columna < 1 || columna > 3) {
-            cliente.enviarMensaje("Sistema Gato: Movimiento inválido. Usa /move <fila> <columna> (fila y columna deben ser 1, 2 o 3).");
+            cliente.enviarMensaje("Sistema Gato: Movimiento inválido. Usa /move <fila> <columna> (1-3).");
             return false;
         }
-
-        int r = fila - 1;
-        int c = columna - 1;
-
-        if (tablero[r][c] != EstadoCasilla.VACIO) {
-            cliente.enviarMensaje("Sistema Gato: La posición (" + fila + "," + columna + ") ya está ocupada.");
+        if (tablero[fila - 1][columna - 1] != EstadoCasilla.VACIO) {
+            cliente.enviarMensaje("Sistema Gato: Posición (" + fila + "," + columna + ") ya ocupada.");
             return false;
         }
+        return true;
+    }
 
+    private void realizarCambio(UnCliente cliente, int fila, int columna) {
         EstadoCasilla simbolo = (cliente == jugadorX) ? EstadoCasilla.X : EstadoCasilla.O;
-        tablero[r][c] = simbolo;
+        tablero[fila - 1][columna - 1] = simbolo;
+    }
 
-        String notificacion = "Sistema Gato: " + cliente.getNombreCliente() + " ha jugado en (" + fila + "," + columna + ").";
-
+    private boolean verificarFinDeJuego(UnCliente cliente, int fila, int columna) throws IOException {
+        EstadoCasilla simbolo = (cliente == jugadorX) ? EstadoCasilla.X : EstadoCasilla.O;
+        String notif = "Sistema Gato: " + cliente.getNombreCliente() + " jugó en (" + fila + "," + columna + ").";
         if (verificarGanador(simbolo)) {
             estado = (simbolo == EstadoCasilla.X) ? EstadoJuego.GANA_X : EstadoJuego.GANA_O;
-            notificarResultado(notificacion + "\nSistema Gato: ¡" + cliente.getNombreCliente() + " (" + getSimbolo(cliente) + ") ha ganado!");
+            notificarResultado(notif + "\nSistema Gato: ¡" + cliente.getNombreCliente() + " ha ganado!");
             return true;
         } else if (verificarEmpate()) {
             estado = EstadoJuego.EMPATE;
-            notificarResultado(notificacion + "\nSistema Gato: ¡Es un empate!");
+            notificarResultado(notif + "\nSistema Gato: ¡Es un empate!");
             return true;
         }
-
-        turnoActual = getContrincante(cliente);
-        notificacion += "\nTurno de " + turnoActual.getNombreCliente() + " (" + getSimbolo(turnoActual) + ").";
-        notificarMovimiento(notificacion);
-
         return false;
+    }
+
+    private void cambiarTurnoYNotificar(UnCliente cliente) throws IOException {
+        String notif = "Sistema Gato: " + cliente.getNombreCliente() + " ha jugado.";
+        turnoActual = getContrincante(cliente);
+        notif += "\nTurno de " + turnoActual.getNombreCliente() + " (" + getSimbolo(turnoActual) + ").";
+        notificarMovimiento(notif);
     }
 
     public void finalizarPorAbandono(UnCliente desconectado) throws IOException {
