@@ -25,11 +25,10 @@ public class Mensaje {
     }
 
     public static void enviarMensajePrivadoEntreJugadores(String mensaje, UnCliente remitente, String nombreDestino, ServidorMulti servidor) throws IOException {
-        String remitenteNombre = remitente.getNombreCliente();
         UnCliente clienteDestino = servidor.getCliente(nombreDestino);
 
         if (clienteDestino != null) {
-            String mensajeParaDestinatarios = formatearMensajePrivado(remitenteNombre, mensaje);
+            String mensajeParaDestinatarios = formatearMensajePrivado(remitente.getNombreCliente(), mensaje);
             clienteDestino.enviarMensaje(mensajeParaDestinatarios);
 
             String mensajeConfirmacion = formatearConfirmacionPrivada(nombreDestino, mensaje);
@@ -48,35 +47,13 @@ public class Mensaje {
     }
 
     private static void enviarAClientes(UnCliente remitente, String destinatariosStr, String mensajeParaDestinatarios, ServidorMulti servidor) throws IOException {
-        String remitenteNombre = remitente.getNombreCliente();
         String[] destinatarios = destinatariosStr.split(",");
         StringBuilder destinatariosEnviados = new StringBuilder();
         boolean alMenosUnoEnviado = false;
 
         for (String dest : destinatarios) {
             String nombreDestinatario = dest.trim();
-            UnCliente clienteDestino = servidor.getCliente(nombreDestinatario);
-
-            if (clienteDestino != null) {
-                boolean bloqueadoPorDestino = BDusuarios.estaBloqueado(nombreDestinatario, remitenteNombre);
-                boolean bloqueadoPorRemitente = BDusuarios.estaBloqueado(remitenteNombre, nombreDestinatario);
-
-                if (bloqueadoPorDestino || bloqueadoPorRemitente) {
-                    String razon = bloqueadoPorDestino ?
-                            "El usuario te tiene bloqueado." :
-                            "Tienes bloqueado al usuario.";
-
-                    remitente.enviarMensaje("Sistema: Error al enviar mensaje privado a '" + nombreDestinatario + "'. " + razon);
-                    continue;
-                }
-
-                clienteDestino.enviarMensaje(mensajeParaDestinatarios);
-                if (destinatariosEnviados.length() > 0) destinatariosEnviados.append(", ");
-                destinatariosEnviados.append(nombreDestinatario);
-                alMenosUnoEnviado = true;
-            } else {
-                remitente.enviarMensaje("Sistema: El usuario '" + nombreDestinatario + "' no está conectado o no existe.");
-            }
+            alMenosUnoEnviado = procesarDestinatarioPrivado(remitente, nombreDestinatario, mensajeParaDestinatarios, servidor, destinatariosEnviados) || alMenosUnoEnviado;
         }
 
         if (alMenosUnoEnviado) {
@@ -84,6 +61,37 @@ public class Mensaje {
             String mensajeConfirmacion = formatearConfirmacionPrivada(destinatariosEnviados.toString(), contenidoMensaje);
             remitente.enviarMensaje(mensajeConfirmacion);
         }
+    }
+
+    private static boolean procesarDestinatarioPrivado(UnCliente remitente, String nombreDestinatario, String mensajeParaDestinatarios, ServidorMulti servidor, StringBuilder destinatariosEnviados) throws IOException {
+        UnCliente clienteDestino = servidor.getCliente(nombreDestinatario);
+        String remitenteNombre = remitente.getNombreCliente();
+
+        if (clienteDestino == null) {
+            remitente.enviarMensaje("Sistema: El usuario '" + nombreDestinatario + "' no está conectado o no existe.");
+            return false;
+        }
+
+        if (esBloqueoBidireccional(nombreDestinatario, remitenteNombre, remitente)) {
+            return false;
+        }
+
+        clienteDestino.enviarMensaje(mensajeParaDestinatarios);
+        if (destinatariosEnviados.length() > 0) destinatariosEnviados.append(", ");
+        destinatariosEnviados.append(nombreDestinatario);
+        return true;
+    }
+
+    private static boolean esBloqueoBidireccional(String nombre1, String nombre2, UnCliente notificador) throws IOException {
+        boolean bloqueadoPorDestino = BDusuarios.estaBloqueado(nombre1, nombre2);
+        boolean bloqueadoPorRemitente = BDusuarios.estaBloqueado(nombre2, nombre1);
+
+        if (bloqueadoPorDestino || bloqueadoPorRemitente) {
+            String razon = bloqueadoPorDestino ? "El usuario te tiene bloqueado." : "Tienes bloqueado al usuario.";
+            notificador.enviarMensaje("Sistema: Error al enviar mensaje privado a '" + nombre1 + "'. " + razon);
+            return true;
+        }
+        return false;
     }
 
     private static boolean enviarMensajePrivado(String mensajeCompleto, UnCliente remitente, ServidorMulti servidor) throws IOException {
@@ -98,24 +106,25 @@ public class Mensaje {
     }
 
     private static void difundirMensajePublico(String mensaje, UnCliente remitente, ServidorMulti servidor) throws IOException {
-        String remitenteNombre = remitente.getNombreCliente();
-        String mensajeCompleto = remitenteNombre + ": " + mensaje;
-
+        String mensajeCompleto = remitente.getNombreCliente() + ": " + mensaje;
         remitente.enviarMensaje("(Mensaje público enviado)");
 
         for (UnCliente cliente : servidor.getTodosLosClientes()) {
-            if (cliente != remitente) {
-                String clienteNombre = cliente.getNombreCliente();
-                boolean bloqueadoPorReceptor = BDusuarios.estaBloqueado(clienteNombre, remitenteNombre);
-                boolean bloqueadoPorRemitente = BDusuarios.estaBloqueado(remitenteNombre, clienteNombre);
-
-                if (bloqueadoPorReceptor || bloqueadoPorRemitente) {
-                    continue;
-                }
-
-                cliente.enviarMensaje(mensajeCompleto);
-            }
+            enviarMensajeSiNoBloqueadoPublico(cliente, remitente, mensajeCompleto);
         }
+    }
+
+    private static void enviarMensajeSiNoBloqueadoPublico(UnCliente receptor, UnCliente remitente, String mensaje) throws IOException {
+        if (receptor == remitente) return;
+
+        String receptorNombre = receptor.getNombreCliente();
+        String remitenteNombre = remitente.getNombreCliente();
+
+        if (BDusuarios.estaBloqueado(receptorNombre, remitenteNombre) || BDusuarios.estaBloqueado(remitenteNombre, receptorNombre)) {
+            return;
+        }
+
+        receptor.enviarMensaje(mensaje);
     }
 
     private static void iterarYNotificar(String notificacion, UnCliente clienteExcluido, ServidorMulti servidor) {
