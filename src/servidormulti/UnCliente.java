@@ -77,8 +77,8 @@ public class UnCliente implements Runnable {
         String oponenteNombre = controladorJuego.getOponenteSiEstaJugando(nombreCliente);
 
         if (oponenteNombre != null) {
-            if (mensaje.startsWith("/") || mensaje.startsWith("@")) {
-                enviarMensaje("Sistema: Estás en una partida de Gato. Solo se permite chat simple con el oponente o el comando /move.");
+            if (mensaje.startsWith("@")) {
+                Mensaje.procesar(mensaje, this, servidor);
                 return;
             }
 
@@ -91,11 +91,7 @@ public class UnCliente implements Runnable {
             return;
         }
 
-        if (!mensaje.startsWith("@") && mensaje.trim().isEmpty()) {
-            enviarMensaje("Sistema: No puedes enviar un mensaje público vacío.");
-        } else {
-            Mensaje.procesar(mensaje, this, servidor);
-        }
+        Mensaje.procesar(mensaje, this, servidor);
     }
 
     private void inicializarCliente() throws IOException {
@@ -118,28 +114,7 @@ public class UnCliente implements Runnable {
     private void bucleDeLectura() throws IOException {
         while (true) {
             String mensaje = entrada.readUTF();
-
             String comando = mensaje.split(" ", 2)[0];
-            boolean esComandoJuegoRespuesta = comando.equals("/accept") || comando.equals("/reject");
-
-            if (autenticado && controladorJuego.tieneInvitacionPendiente(nombreCliente)) {
-                if (esComandoJuegoRespuesta) {
-                    controladorJuego.manejarComando(mensaje, this);
-                } else {
-                    enviarMensaje("Sistema: Tienes una invitación pendiente para jugar al Gato. Debes usar /accept <usuario> o /reject <usuario> para responder antes de realizar cualquier otra acción.");
-                }
-                continue;
-            }
-
-            if (comando.equals("/gato") || comando.equals("/move") || esComandoJuegoRespuesta) {
-                controladorJuego.manejarComando(mensaje, this);
-                continue;
-            }
-
-            if (comando.equals("/block") || comando.equals("/unblock")) {
-                controladorBloqueo.manejarComando(mensaje);
-                continue;
-            }
 
             if (comando.equals("/register") || comando.equals("/login")) {
                 autenticador.manejarAutenticacion(mensaje);
@@ -147,7 +122,43 @@ public class UnCliente implements Runnable {
             }
 
             if (autenticado) {
+
+                boolean isPlaying = controladorJuego.getOponenteSiEstaJugando(nombreCliente) != null;
+                boolean hasInvitation = controladorJuego.tieneInvitacionPendiente(nombreCliente);
+
+                if (hasInvitation) {
+                    boolean esComandoJuegoRespuesta = comando.equals("/accept") || comando.equals("/reject");
+                    if (esComandoJuegoRespuesta) {
+                        controladorJuego.manejarComando(mensaje, this);
+                    } else {
+                        enviarMensaje("Sistema: Tienes una invitación pendiente para jugar al Gato. Debes usar /accept <usuario> o /reject <usuario> para responder antes de realizar cualquier otra acción.");
+                    }
+                    continue;
+                }
+
+                if (isPlaying) {
+                    if (comando.equals("/move")) {
+                        controladorJuego.manejarComando(mensaje, this);
+                    } else if (comando.startsWith("/")) {
+                        enviarMensaje("Sistema: Estás en una partida de Gato. Solo se permite /move o enviar mensajes a tu oponente o mensajes privados (@otro). Las acciones de chat control (/block, /unblock) y otros comandos de juego están bloqueados.");
+                    } else {
+                        manejarMensajeAutenticado(mensaje);
+                    }
+                    continue;
+                }
+
+                if (comando.equals("/block") || comando.equals("/unblock")) {
+                    controladorBloqueo.manejarComando(mensaje);
+                    continue;
+                }
+
+                if (comando.equals("/gato") || comando.equals("/accept") || comando.equals("/reject") || comando.equals("/move")) {
+                    controladorJuego.manejarComando(mensaje, this);
+                    continue;
+                }
+
                 manejarMensajeAutenticado(mensaje);
+
             } else {
                 controladorInvitado.manejarMensaje(mensaje, servidor);
             }
