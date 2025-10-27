@@ -17,9 +17,11 @@ public class JuegoGato {
     public JuegoGato(UnCliente c1, UnCliente c2) throws IOException {
         this.tablero = inicializarTablero();
         this.estado = EstadoJuego.ACTIVO;
+
         UnCliente[] jugadores = asignarSimbolos(c1, c2);
         this.jugadorX = jugadores[0];
         this.jugadorO = jugadores[1];
+
         this.turnoActual = asignarTurnoInicial(jugadores);
         notificarInicio();
     }
@@ -74,13 +76,17 @@ public class JuegoGato {
         return sb.toString();
     }
 
+    private String obtenerSimboloCasilla(int i, int j) {
+        switch (tablero[i][j]) {
+            case X: return "X";
+            case O: return "O";
+            default: return "-";
+        }
+    }
+
     private void dibujarFila(StringBuilder sb, int i) {
         for (int j = 0; j < 3; j++) {
-            switch (tablero[i][j]) {
-                case X: sb.append("X"); break;
-                case O: sb.append("O"); break;
-                case VACIO: sb.append("-"); break;
-            }
+            sb.append(obtenerSimboloCasilla(i, j));
             if (j < 2) sb.append("|");
         }
         sb.append("\n");
@@ -140,8 +146,11 @@ public class JuegoGato {
 
     public boolean realizarMovimiento(UnCliente cliente, int fila, int columna) throws IOException {
         if (!validarMovimiento(cliente, fila, columna)) return false;
+
         realizarCambio(cliente, fila, columna);
+
         if (verificarFinDeJuego(cliente, fila, columna)) return true;
+
         cambiarTurnoYNotificar(cliente);
         return false;
     }
@@ -170,6 +179,7 @@ public class JuegoGato {
     private boolean verificarFinDeJuego(UnCliente cliente, int fila, int columna) throws IOException {
         EstadoCasilla simbolo = (cliente == jugadorX) ? EstadoCasilla.X : EstadoCasilla.O;
         String notif = "Sistema Gato: " + cliente.getNombreCliente() + " jugó en (" + fila + "," + columna + ").";
+
         if (verificarGanador(simbolo)) {
             estado = (simbolo == EstadoCasilla.X) ? EstadoJuego.GANA_X : EstadoJuego.GANA_O;
             notificarResultado(notif + "\nSistema Gato: ¡" + cliente.getNombreCliente() + " ha ganado!");
