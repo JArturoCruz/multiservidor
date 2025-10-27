@@ -112,6 +112,17 @@ public class UnCliente implements Runnable {
         enviarMensaje("Sistema: - Mover: /move <fila> <columna> (ej: /move 1 3)");
     }
 
+    private void manejarDesconexion() {
+        if (nombreCliente != null) {
+            servidor.removerCliente(nombreCliente);
+            Mensaje.notificarATodos(nombreCliente + " ha abandonado el chat.", null, servidor);
+        }
+    }
+
+    private void manejarErrorIO() {
+        System.out.println("Error de comunicación con " + (nombreCliente != null ? nombreCliente : "un cliente"));
+    }
+
     private void bucleDeLectura() throws IOException {
         while (true) {
             String mensaje = entrada.readUTF();
@@ -172,17 +183,6 @@ public class UnCliente implements Runnable {
         } else {
             manejarMensajeAutenticado(mensaje);
         }
-    }
-
-    private void manejarDesconexion() {
-        if (nombreCliente != null) {
-            servidor.removerCliente(nombreCliente);
-            Mensaje.notificarATodos(nombreCliente + " ha abandonado el chat.", null, servidor);
-        }
-    }
-
-    private void manejarErrorIO() {
-        System.out.println("Error de comunicación con " + (nombreCliente != null ? nombreCliente : "un cliente"));
     }
 
     @Override
