@@ -31,9 +31,7 @@ public class ControladorJuego {
         if (juego != null) {
             UnCliente cliente = servidor.getCliente(nombreCliente);
             UnCliente oponente = juego.getContrincante(cliente);
-            if (oponente != null) {
-                return oponente.getNombreCliente();
-            }
+            if (oponente != null) return oponente.getNombreCliente();
         }
         return null;
     }
