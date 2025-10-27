@@ -48,6 +48,10 @@ public class ServidorMulti {
         return clientes.values();
     }
 
+    public boolean clienteEstaConectado(String nombre) {
+        return clientes.containsKey(nombre);
+    }
+
     public ControladorJuego getControladorJuego() {
         return controladorJuego;
     }

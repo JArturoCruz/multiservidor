@@ -55,6 +55,15 @@ public class JuegoGato {
     public UnCliente getTurnoActual() { return turnoActual; }
     public EstadoJuego getEstado() { return estado; }
 
+    public UnCliente getGanador() {
+        if (estado == EstadoJuego.GANA_X) {
+            return jugadorX;
+        } else if (estado == EstadoJuego.GANA_O) {
+            return jugadorO;
+        }
+        return null;
+    }
+
     public UnCliente getContrincante(UnCliente cliente) {
         if (cliente == jugadorX) return jugadorO;
         if (cliente == jugadorO) return jugadorX;
@@ -128,7 +137,7 @@ public class JuegoGato {
         String infoX = jugadorX.getNombreCliente() + " (X)";
         String infoO = jugadorO.getNombreCliente() + " (O)";
         String mensajeGeneral = "Sistema Gato: ¡Juego iniciado! " + infoX + " vs " + infoO + ".\n";
-        String mensajeTurno = "Turno de " + turnoActual.getNombreCliente() + " (" + getSimbolo(turnoActual) + "). Usa /move 1 3";
+        String mensajeTurno = "Turno de " + turnoActual.getNombreCliente() + " (" + getSimbolo(turnoActual) + "). Usa /move <oponente> 1 3";
 
         jugadorX.enviarMensaje(mensajeGeneral + "Tú eres X." + dibujarTablero() + mensajeTurno);
         jugadorO.enviarMensaje(mensajeGeneral + "Tú eres O." + dibujarTablero() + mensajeTurno);
@@ -182,11 +191,11 @@ public class JuegoGato {
 
         if (verificarGanador(simbolo)) {
             estado = (simbolo == EstadoCasilla.X) ? EstadoJuego.GANA_X : EstadoJuego.GANA_O;
-            notificarResultado(notif + "\nSistema Gato: ¡" + cliente.getNombreCliente() + " ha ganado!");
+            notificarResultado(notif + "\nSistema Gato: ¡" + cliente.getNombreCliente() + " ha ganado! Usa /si <oponente> o /no <oponente> para revancha.");
             return true;
         } else if (verificarEmpate()) {
             estado = EstadoJuego.EMPATE;
-            notificarResultado(notif + "\nSistema Gato: ¡Es un empate!");
+            notificarResultado(notif + "\nSistema Gato: ¡Es un empate! Usa /si <oponente> o /no <oponente> para revancha.");
             return true;
         }
         return false;

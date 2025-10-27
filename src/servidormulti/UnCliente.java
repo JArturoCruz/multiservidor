@@ -4,6 +4,7 @@ import mensaje.Mensaje;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
+import java.util.Set;
 
 public class UnCliente implements Runnable {
 
@@ -68,15 +69,8 @@ public class UnCliente implements Runnable {
     }
 
     private void manejarMensajeAutenticado(String mensaje) throws IOException {
-        String oponenteNombre = controladorJuego.getOponenteSiEstaJugando(nombreCliente);
-
         if (mensaje.trim().isEmpty()) {
             enviarMensaje("Sistema: No puedes enviar un mensaje vacío.");
-            return;
-        }
-
-        if (oponenteNombre != null) {
-            manejarChatEnJuego(mensaje, oponenteNombre);
             return;
         }
 
@@ -86,14 +80,6 @@ public class UnCliente implements Runnable {
         }
 
         Mensaje.procesar(mensaje, this, servidor);
-    }
-
-    private void manejarChatEnJuego(String mensaje, String oponenteNombre) throws IOException {
-        if (mensaje.startsWith("@")) {
-            Mensaje.procesar(mensaje, this, servidor);
-        } else {
-            Mensaje.enviarMensajePrivadoEntreJugadores(mensaje, this, oponenteNombre, servidor);
-        }
     }
 
     private void inicializarCliente() throws IOException {
@@ -106,14 +92,20 @@ public class UnCliente implements Runnable {
         enviarMensaje("Sistema: Tu nombre actual es " + nombreCliente + ". Tienes un límite de " + LIMITE_MENSAJES_GRATIS + " mensajes antes de autenticarte.");
         enviarMensaje("Sistema: Usa '/register <nombre_usuario> <PIN>' (Ej: /register Arturo 1234) o '/login <nombre_usuario> <PIN>'.");
         enviarMensaje("Sistema: Usa '/block <usuario>' y '/unblock <usuario>' para gestionar bloqueos (requiere estar autenticado).");
-        enviarMensaje("Sistema: Juega al Gato con usuarios autenticados:");
+        enviarMensaje("Sistema: Juega al Gato con usuarios autenticados. Puedes tener múltiples partidas activas:");
         enviarMensaje("Sistema: - Proponer juego: /gato <usuario>");
-        enviarMensaje("Sistema: - Responder propuesta: /accept <usuario> o /reject <usuario>");
-        enviarMensaje("Sistema: - Mover: /move <fila> <columna> (ej: /move 1 3)");
+        enviarMensaje("Sistema: - Responder propuesta: /accept <proponente> o /reject <proponente>");
+        enviarMensaje("Sistema: - Mover: /move <oponente> <fila> <columna> (ej: /move [NombreOponente] 1 3)");
+        enviarMensaje("Sistema: - Revancha: /si <oponente> o /no <oponente> (al finalizar un juego).");
     }
 
     private void manejarDesconexion() {
         if (nombreCliente != null) {
+            try {
+                controladorJuego.finalizarPorDesconexion(this);
+            } catch (IOException e) {
+                System.out.println("Error al notificar desconexión de juego.");
+            }
             servidor.removerCliente(nombreCliente);
             Mensaje.notificarATodos(nombreCliente + " ha abandonado el chat.", null, servidor);
         }
@@ -143,44 +135,45 @@ public class UnCliente implements Runnable {
     }
 
     private void procesarMensajeAutenticado(String mensaje, String comando) throws IOException {
-        boolean hasInvitation = controladorJuego.tieneInvitacionPendiente(nombreCliente);
-        boolean isPlaying = controladorJuego.getOponenteSiEstaJugando(nombreCliente) != null;
 
-        if (hasInvitation) {
-            manejarInvitacionPendiente(mensaje, comando);
-        } else if (isPlaying) {
-            manejarAccionEnJuego(mensaje, comando);
-        } else {
-            manejarAccionChat(mensaje, comando);
-        }
-    }
+        boolean estaEnInteraccionJuego = controladorJuego.estaJugando(nombreCliente) || controladorJuego.tieneRevanchaPendiente(nombreCliente);
 
-    private void manejarInvitacionPendiente(String mensaje, String comando) throws IOException {
-        boolean esRespuestaJuego = comando.equals("/accept") || comando.equals("/reject");
-
-        if (esRespuestaJuego) {
+        // Comandos de Juego y Revancha (Permitidos siempre)
+        if (comando.equals("/move") || comando.equals("/gato") || comando.equals("/accept") || comando.equals("/reject") || comando.equals("/si") || comando.equals("/no")) {
             controladorJuego.manejarComando(mensaje, this);
-        } else {
-            enviarMensaje("Sistema: Tienes una invitación pendiente para jugar al Gato. Debes responder antes de realizar cualquier otra acción.");
         }
-    }
+        // Restricción de otras acciones si está jugando o en revancha
+        else if (estaEnInteraccionJuego) {
 
-    private void manejarAccionEnJuego(String mensaje, String comando) throws IOException {
-        if (comando.equals("/move")) {
-            controladorJuego.manejarComando(mensaje, this);
-        } else if (comando.startsWith("/")) {
-            enviarMensaje("Sistema: Estás en partida. Solo /move, chat con oponente o @privado.");
-        } else {
-            manejarMensajeAutenticado(mensaje);
+            if (mensaje.startsWith("@")) {
+                String[] partes = mensaje.split(" ", 2);
+                String nombreDestino = partes[0].substring(1);
+
+                Set<String> oponentes = controladorJuego.getOponentesActivos(nombreCliente);
+
+                if (oponentes.contains(nombreDestino)) {
+                    // LLAMADA CORREGIDA: Usar Mensaje.enviarMensajePrivadoEntreJugadores
+                    Mensaje.enviarMensajePrivadoEntreJugadores(mensaje, this, nombreDestino, servidor);
+                } else {
+                    enviarMensaje("Sistema: Solo puedes enviar mensajes privados a tus oponentes activos mientras juegas.");
+                }
+            }
+            else if (comando.startsWith("/")) {
+                enviarMensaje("Sistema: Acción bloqueada. Solo se permiten comandos de juego (/move, /si, /no, /gato, /accept, /reject) y chat privado (@oponente) mientras estás en partida/revancha.");
+            }
+            else {
+                enviarMensaje("Sistema: Chat público bloqueado. Usa @<oponente> <mensaje> para hablar con tu oponente.");
+            }
         }
-    }
-
-    private void manejarAccionChat(String mensaje, String comando) throws IOException {
-        if (comando.equals("/block") || comando.equals("/unblock")) {
+        // Acciones normales si NO está jugando ni esperando revancha
+        else if (comando.equals("/block") || comando.equals("/unblock")) {
             controladorBloqueo.manejarComando(mensaje);
-        } else if (comando.startsWith("/gato") || comando.equals("/accept") || comando.equals("/reject")) {
-            controladorJuego.manejarComando(mensaje, this);
-        } else {
+        }
+        else if (comando.startsWith("/")) {
+            enviarMensaje("Sistema: Comando no reconocido.");
+        }
+        else {
+            // Chat público o privado normal
             manejarMensajeAutenticado(mensaje);
         }
     }

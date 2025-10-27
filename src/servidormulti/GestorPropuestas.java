@@ -1,13 +1,15 @@
 package servidormulti;
 
-import bd.BDusuarios;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 public class GestorPropuestas {
-    private final Map<String, String> propuestasPendientes;
+
+    private final Map<String, Map<String, Propuesta>> propuestasPendientes;
     private final ServidorMulti servidor;
     private final ControladorJuego controladorJuego;
 
@@ -16,171 +18,142 @@ public class GestorPropuestas {
         this.servidor = servidor;
         this.controladorJuego = controladorJuego;
     }
+
     public boolean tieneInvitacionPendiente(String nombreCliente) {
-        return propuestasPendientes.containsValue(nombreCliente);
+        Map<String, Propuesta> invitaciones = propuestasPendientes.get(nombreCliente);
+        return invitaciones != null && !invitaciones.isEmpty();
     }
 
-    private boolean tienePropuestaPendiente(String nombre1, String nombre2) {
-        if (propuestasPendientes.getOrDefault(nombre1, "").equals(nombre2)) return true;
-        if (propuestasPendientes.getOrDefault(nombre2, "").equals(nombre1)) return true;
-        return false;
-    }
-    public void proponerJuego(UnCliente proponente, String nombreDestino) throws IOException {
-        if (!validarEntradaPropuesta(proponente, nombreDestino)) return;
-        String proponenteNombre = proponente.getNombreCliente();
-        UnCliente clienteDestino = servidor.getCliente(nombreDestino);
-        if (!validarCondicionesJuego(proponente, nombreDestino, clienteDestino)) return;
-        propuestasPendientes.put(proponenteNombre, nombreDestino);
-        notificarPropuesta(proponente, nombreDestino, clienteDestino);
-    }
+    public void proponerJuego(UnCliente proponente, String nombreInvitado) throws IOException {
+        String nombreProponente = proponente.getNombreCliente();
 
-    private boolean validarEntradaPropuesta(UnCliente proponente, String nombreDestino) throws IOException {
-        if (nombreDestino.isEmpty()) {
-            proponente.enviarMensaje("Sistema Gato: Uso incorrecto. Usa /gato <usuario>");
-            return false;
+        if (nombreProponente.equalsIgnoreCase(nombreInvitado)) {
+            proponente.enviarMensaje("Sistema Gato: No puedes invitarte a ti mismo.");
+            return;
         }
-        if (proponente.getNombreCliente().equals(nombreDestino)) {
-            proponente.enviarMensaje("Sistema Gato: No puedes jugar al Gato contigo mismo.");
-            return false;
+
+        if (controladorJuego.estaJugandoCon(nombreProponente, nombreInvitado)) {
+            proponente.enviarMensaje("Sistema Gato: Ya tienes una partida activa con " + nombreInvitado + ".");
+            return;
         }
-        return true;
-    }
 
-    private boolean validarCondicionesJuego(UnCliente proponente, String nombreDestino, UnCliente clienteDestino) throws IOException {
-        if (!validarDestino(proponente, nombreDestino, clienteDestino)) return false;
-        if (!validarBloqueo(proponente, nombreDestino)) return false;
-        if (!validarEstadoActivo(proponente, nombreDestino)) return false;
-        if (!validarPropuestasCruzadas(proponente, nombreDestino)) return false;
-        return true;
-    }
-
-    private boolean validarDestino(UnCliente proponente, String nombreDestino, UnCliente clienteDestino) throws IOException {
-        if (clienteDestino == null || !clienteDestino.isAutenticado()) {
-            proponente.enviarMensaje("Sistema Gato: El usuario '" + nombreDestino + "' no está conectado o no está autenticado.");
-            return false;
+        UnCliente invitado = servidor.getCliente(nombreInvitado);
+        if (invitado == null || !invitado.isAutenticado()) {
+            proponente.enviarMensaje("Sistema Gato: El usuario '" + nombreInvitado + "' no está conectado o no está autenticado.");
+            return;
         }
-        return true;
-    }
 
-    private boolean validarBloqueo(UnCliente proponente, String nombreDestino) throws IOException {
-        String p = proponente.getNombreCliente();
-        boolean bloqueadoPorDestino = BDusuarios.estaBloqueado(nombreDestino, p);
-        boolean bloqueadoPorRemitente = BDusuarios.estaBloqueado(p, nombreDestino);
-
-        if (bloqueadoPorDestino || bloqueadoPorRemitente) {
-            String razon = bloqueadoPorDestino ? "El usuario te tiene bloqueado." : "Tienes bloqueado al usuario.";
-            proponente.enviarMensaje("Sistema Gato: Error al proponer juego a '" + nombreDestino + "'. " + razon);
-            return false;
+        if (controladorJuego.estaJugandoCon(nombreInvitado, nombreProponente)) {
+            proponente.enviarMensaje("Sistema Gato: " + nombreInvitado + " ya tiene una partida activa contigo. No puedes iniciar otra.");
+            return;
         }
-        return true;
-    }
 
-    private boolean validarEstadoActivo(UnCliente proponente, String nombreDestino) throws IOException {
-        if (controladorJuego.estaJugando(proponente.getNombreCliente()) || controladorJuego.estaJugando(nombreDestino)) {
-            proponente.enviarMensaje("Sistema Gato: Tú o el usuario '" + nombreDestino + "' ya están en una partida activa.");
-            return false;
+        Map<String, Propuesta> invitacionesDelInvitado = propuestasPendientes.get(nombreInvitado);
+        if (invitacionesDelInvitado != null && invitacionesDelInvitado.containsKey(nombreProponente)) {
+            proponente.enviarMensaje("Sistema Gato: Ya enviaste una invitación a " + nombreInvitado + ". Espera su respuesta.");
+            return;
         }
-        return true;
-    }
 
-    private boolean validarPropuestasCruzadas(UnCliente proponente, String nombreDestino) throws IOException {
-        String p = proponente.getNombreCliente();
-        if (tienePropuestaPendiente(p, nombreDestino) || tieneInvitacionPendiente(p) || tieneInvitacionPendiente(nombreDestino)) {
-            proponente.enviarMensaje("Sistema Gato: Ya tienes una propuesta pendiente (enviada o recibida) con " + nombreDestino + ".");
-            return false;
-        }
-        return true;
-    }
+        Propuesta propuesta = new Propuesta(proponente, invitado);
 
-    private void notificarPropuesta(UnCliente proponente, String nombreDestino, UnCliente clienteDestino) throws IOException {
-        proponente.enviarMensaje("Sistema Gato: Propuesta enviada a " + nombreDestino + ". Esperando respuesta...");
-        clienteDestino.enviarMensaje("Sistema Gato: ¡" + proponente.getNombreCliente() + " te ha propuesto jugar al Gato! Usa /accept " + proponente.getNombreCliente() + " o /reject " + proponente.getNombreCliente() + ".");
+        propuestasPendientes.computeIfAbsent(nombreInvitado, k -> Collections.synchronizedMap(new HashMap<>()))
+                .put(nombreProponente, propuesta);
+
+        proponente.enviarMensaje("Sistema Gato: Invitación enviada a " + nombreInvitado + ". Esperando respuesta.");
+        invitado.enviarMensaje("Sistema Gato: Has recibido una invitación de " + nombreProponente + ". Responde con /accept " + nombreProponente + " o /reject " + nombreProponente + ".");
     }
 
     public void aceptarPropuesta(UnCliente aceptante, String nombreProponente) throws IOException {
+        String nombreAceptante = aceptante.getNombreCliente();
+
         if (nombreProponente.isEmpty()) {
-            aceptante.enviarMensaje("Sistema Gato: Uso incorrecto. Usa /accept <usuario>");
+            aceptante.enviarMensaje("Sistema Gato: Comando incorrecto. Usa /accept <nombre_proponente>.");
             return;
         }
 
-        String proponenteEsperado = propuestasPendientes.get(nombreProponente);
-        if (proponenteEsperado == null || !proponenteEsperado.equals(aceptante.getNombreCliente())) {
-            aceptante.enviarMensaje("Sistema Gato: El usuario '" + nombreProponente + "' no te ha propuesto un juego.");
+        Map<String, Propuesta> propuestasRecibidas = propuestasPendientes.get(nombreAceptante);
+        if (propuestasRecibidas == null || !propuestasRecibidas.containsKey(nombreProponente)) {
+            aceptante.enviarMensaje("Sistema Gato: No tienes una invitación pendiente de " + nombreProponente + ".");
             return;
         }
 
-        UnCliente proponente = servidor.getCliente(nombreProponente);
-        if (!validarProponente(aceptante, nombreProponente, proponente)) return;
+        Propuesta propuesta = propuestasRecibidas.get(nombreProponente);
+        UnCliente proponente = propuesta.getProponente();
 
-        if (controladorJuego.estaJugando(aceptante.getNombreCliente()) || controladorJuego.estaJugando(nombreProponente)) {
-            aceptante.enviarMensaje("Sistema Gato: Tú o el proponente están ahora en una partida activa.");
-            propuestasPendientes.remove(nombreProponente);
+        if (!servidor.clienteEstaConectado(proponente.getNombreCliente())) {
+            aceptante.enviarMensaje("Sistema Gato: El proponente (" + nombreProponente + ") se desconectó.");
+            removerPropuesta(nombreAceptante, nombreProponente);
             return;
         }
 
-        propuestasPendientes.remove(nombreProponente);
         controladorJuego.iniciarJuego(proponente, aceptante);
+        removerPropuesta(nombreAceptante, nombreProponente);
+
+        proponente.enviarMensaje("Sistema Gato: ¡" + nombreAceptante + " aceptó tu invitación! Empiezas tú. Usa /move " + nombreAceptante + " <fila> <columna>.");
     }
 
-    private boolean validarProponente(UnCliente aceptante, String nombreProponente, UnCliente proponente) throws IOException {
-        if (proponente == null) {
-            aceptante.enviarMensaje("Sistema Gato: El proponente se ha desconectado. No se pudo iniciar el juego.");
-            propuestasPendientes.remove(nombreProponente);
-            return false;
-        }
-        return true;
-    }
+    public void rechazarPropuesta(UnCliente rechazador, String nombreProponente) throws IOException {
+        String nombreRechazador = rechazador.getNombreCliente();
 
-    public void rechazarPropuesta(UnCliente rechazante, String nombreProponente) throws IOException {
         if (nombreProponente.isEmpty()) {
-            rechazante.enviarMensaje("Sistema Gato: Uso incorrecto. Usa /reject <usuario>");
+            rechazador.enviarMensaje("Sistema Gato: Comando incorrecto. Usa /reject <nombre_proponente>.");
             return;
         }
 
-        String proponenteEsperado = propuestasPendientes.get(nombreProponente);
-        if (proponenteEsperado == null || !proponenteEsperado.equals(rechazante.getNombreCliente())) {
-            rechazante.enviarMensaje("Sistema Gato: El usuario '" + nombreProponente + "' no te ha propuesto un juego.");
+        Map<String, Propuesta> propuestasRecibidas = propuestasPendientes.get(nombreRechazador);
+        if (propuestasRecibidas == null || !propuestasRecibidas.containsKey(nombreProponente)) {
+            rechazador.enviarMensaje("Sistema Gato: No tienes una invitación pendiente de " + nombreProponente + ".");
             return;
         }
-        propuestasPendientes.remove(nombreProponente);
-        notificarRechazo(rechazante, nombreProponente);
-    }
 
-    private void notificarRechazo(UnCliente rechazante, String nombreProponente) throws IOException {
-        UnCliente proponente = servidor.getCliente(nombreProponente);
+        Propuesta propuesta = propuestasRecibidas.get(nombreProponente);
+        UnCliente proponente = propuesta.getProponente();
 
-        if (proponente != null) {
-            proponente.enviarMensaje("Sistema Gato: " + rechazante.getNombreCliente() + " ha rechazado tu propuesta de juego.");
+        removerPropuesta(nombreRechazador, nombreProponente);
+        rechazador.enviarMensaje("Sistema Gato: Has rechazado la invitación de " + nombreProponente + ".");
+
+        if (servidor.clienteEstaConectado(proponente.getNombreCliente())) {
+            proponente.enviarMensaje("Sistema Gato: " + nombreRechazador + " rechazó tu invitación.");
         }
-        rechazante.enviarMensaje("Sistema Gato: Has rechazado la propuesta de " + nombreProponente + ".");
     }
 
-    public void cancelarPropuestasPendientes(String nombreDesconectado) throws IOException {
-        cancelarPropuestasSalientes(nombreDesconectado);
-        cancelarPropuestasEntrantes(nombreDesconectado);
-    }
-
-    private void cancelarPropuestasSalientes(String nombreDesconectado) throws IOException {
-        String nombreDestino = propuestasPendientes.remove(nombreDesconectado);
-        if (nombreDestino != null) {
-            UnCliente destino = servidor.getCliente(nombreDestino);
-            if (destino != null) {
-                destino.enviarMensaje("Sistema Gato: La propuesta de juego de " + nombreDesconectado + " ha sido cancelada.");
+    private void removerPropuesta(String nombreInvitado, String nombreProponente) {
+        Map<String, Propuesta> propuestas = propuestasPendientes.get(nombreInvitado);
+        if (propuestas != null) {
+            propuestas.remove(nombreProponente);
+            if (propuestas.isEmpty()) {
+                propuestasPendientes.remove(nombreInvitado);
             }
         }
     }
 
-    private void cancelarPropuestasEntrantes(String nombreDesconectado) throws IOException {
-        for(Map.Entry<String, String> entry : propuestasPendientes.entrySet()) {
-            if (entry.getValue().equals(nombreDesconectado)) {
-                String nombreProponente = entry.getKey();
-                propuestasPendientes.remove(nombreProponente);
-
-                UnCliente proponente = servidor.getCliente(nombreProponente);
-                if (proponente != null) {
-                    proponente.enviarMensaje("Sistema Gato: La propuesta de juego a " + nombreDesconectado + " ha sido cancelada.");
+    public void cancelarPropuestasPendientes(String nombreCliente) throws IOException {
+        // 1. Eliminar propuestas donde el cliente es el INVITADO (Recibidas)
+        Map<String, Propuesta> invitacionesRecibidas = propuestasPendientes.remove(nombreCliente);
+        if (invitacionesRecibidas != null) {
+            for (Propuesta p : invitacionesRecibidas.values()) {
+                UnCliente proponente = p.getProponente();
+                if (servidor.clienteEstaConectado(proponente.getNombreCliente())) {
+                    proponente.enviarMensaje("Sistema Gato: La invitación que enviaste a " + nombreCliente + " ha sido cancelada por desconexión de " + nombreCliente + ".");
                 }
-                break;
+            }
+        }
+
+        // 2. Eliminar propuestas donde el cliente es el PROPONENTE (Enviadas)
+        Set<String> invitadosConPropuestas = new HashSet<>(propuestasPendientes.keySet());
+        for (String invitadoNombre : invitadosConPropuestas) {
+            Map<String, Propuesta> propuestasDelInvitado = propuestasPendientes.get(invitadoNombre);
+            if (propuestasDelInvitado != null && propuestasDelInvitado.containsKey(nombreCliente)) {
+                propuestasDelInvitado.remove(nombreCliente);
+
+                UnCliente invitado = servidor.getCliente(invitadoNombre);
+                if (invitado != null && servidor.clienteEstaConectado(invitadoNombre)) {
+                    invitado.enviarMensaje("Sistema Gato: La invitación de " + nombreCliente + " ha sido cancelada porque el proponente se desconectó.");
+                }
+
+                if (propuestasDelInvitado.isEmpty()) {
+                    propuestasPendientes.remove(invitadoNombre);
+                }
             }
         }
     }
