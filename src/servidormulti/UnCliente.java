@@ -25,6 +25,7 @@ public class UnCliente implements Runnable {
     private final ControladorMensajesInvitado controladorInvitado;
     private final ControladorBloqueo controladorBloqueo;
     private final ControladorJuego controladorJuego;
+    private final ManejadorComandosJuego manejadorComandosJuego;
 
     UnCliente(Socket s, ServidorMulti servidor) throws IOException {
         salida = new DataOutputStream(s.getOutputStream());
@@ -34,6 +35,7 @@ public class UnCliente implements Runnable {
         this.controladorInvitado = new ControladorMensajesInvitado(this);
         this.controladorBloqueo = new ControladorBloqueo(this);
         this.controladorJuego = servidor.getControladorJuego();
+        this.manejadorComandosJuego = new ManejadorComandosJuego(this.controladorJuego, servidor.getGestorPropuestas());
     }
 
     public void enviarMensaje(String mensaje) throws IOException {
@@ -145,7 +147,7 @@ public class UnCliente implements Runnable {
         boolean estaEnInteraccionJuego = controladorJuego.estaJugando(nombreCliente) || controladorJuego.tieneRevanchaPendiente(nombreCliente);
 
         if (comando.equals("/move") || comando.equals("/gato") || comando.equals("/accept") || comando.equals("/reject") || comando.equals("/si") || comando.equals("/no")) {
-            controladorJuego.manejarComando(mensaje, this);
+            manejadorComandosJuego.manejarComando(mensaje, this);
         }
         else if (comando.equals("/ranking")) {
             manejarRanking();

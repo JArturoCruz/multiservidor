@@ -13,9 +13,17 @@ public class ServidorMulti {
     private int anonimoCONT = 0;
 
     private final ControladorJuego controladorJuego;
+    private final GestorPropuestas gestorPropuestas;
 
     public ServidorMulti() {
-        this.controladorJuego = new ControladorJuego(this);
+        // PASO 1: Inicializar GestorPropuestas (solo necesita 'this')
+        this.gestorPropuestas = new GestorPropuestas(this);
+
+        // PASO 2: Inicializar ControladorJuego (requiere GestorPropuestas)
+        this.controladorJuego = new ControladorJuego(this, gestorPropuestas);
+
+        // PASO 3: Romper la dependencia circular inyectando ControladorJuego en GestorPropuestas
+        this.gestorPropuestas.setControladorJuego(controladorJuego);
     }
 
     public void agregarCliente(String nombre, UnCliente cliente) {
@@ -54,6 +62,10 @@ public class ServidorMulti {
 
     public ControladorJuego getControladorJuego() {
         return controladorJuego;
+    }
+
+    public GestorPropuestas getGestorPropuestas() {
+        return gestorPropuestas;
     }
 
     public synchronized String generarNombreAnonimo() {

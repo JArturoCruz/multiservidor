@@ -16,12 +16,12 @@ public class ControladorJuego {
     private final ServidorMulti servidor;
     private final GestorPropuestas gestorPropuestas;
 
-    public ControladorJuego(ServidorMulti servidor) {
+    public ControladorJuego(ServidorMulti servidor, GestorPropuestas gestorPropuestas) {
         this.juegosActivos = Collections.synchronizedMap(new HashMap<>());
         this.juegosRevanchaPendiente = Collections.synchronizedMap(new HashMap<>());
         this.revanchaAceptada = Collections.synchronizedMap(new HashMap<>());
         this.servidor = servidor;
-        this.gestorPropuestas = new GestorPropuestas(servidor, this);
+        this.gestorPropuestas = gestorPropuestas;
     }
 
     public boolean estaJugando(String nombre) {
@@ -52,6 +52,18 @@ public class ControladorJuego {
         return gestorPropuestas.tieneInvitacionPendiente(nombreCliente);
     }
 
+    public Set<String> getOponentesActivos(String clienteNombre) {
+        Set<String> oponentes = new HashSet<>();
+
+        Map<String, JuegoGato> juegosDelCliente = juegosActivos.get(clienteNombre);
+        if (juegosDelCliente != null) oponentes.addAll(juegosDelCliente.keySet());
+
+        Map<String, JuegoGato> revanchasDelCliente = juegosRevanchaPendiente.get(clienteNombre);
+        if (revanchasDelCliente != null) oponentes.addAll(revanchasDelCliente.keySet());
+
+        return oponentes;
+    }
+
     public void iniciarJuego(UnCliente proponente, UnCliente aceptante) throws IOException {
         JuegoGato juego = new JuegoGato(proponente, aceptante);
 
@@ -65,42 +77,7 @@ public class ControladorJuego {
         aceptante.enviarMensaje("Sistema Gato: ¡Juego iniciado con " + nombreProp + "! Espera el movimiento de " + nombreProp + ".");
     }
 
-    public void manejarComando(String mensaje, UnCliente remitente) throws IOException {
-        if (!remitente.isAutenticado()) {
-            remitente.enviarMensaje("Sistema Gato: Debes estar autenticado para jugar al Gato.");
-            return;
-        }
-
-        String[] partes = mensaje.split(" ", 4);
-        String comando = partes[0];
-        String argumento1 = partes.length > 1 ? partes[1] : "";
-        String argumento2 = partes.length > 2 ? partes[2] : "";
-        String argumento3 = partes.length > 3 ? partes[3] : "";
-
-        switch (comando) {
-            case "/gato":
-                gestorPropuestas.proponerJuego(remitente, argumento1);
-                break;
-            case "/accept":
-                gestorPropuestas.aceptarPropuesta(remitente, argumento1);
-                break;
-            case "/reject":
-                gestorPropuestas.rechazarPropuesta(remitente, argumento1);
-                break;
-            case "/move":
-                manejarMovimiento(remitente, argumento1, argumento2, argumento3);
-                break;
-            case "/si":
-            case "/no":
-                manejarRespuestaRevancha(remitente, argumento1, comando.equals("/si"));
-                break;
-            default:
-                remitente.enviarMensaje("Sistema Gato: Comando de juego desconocido.");
-                break;
-        }
-    }
-
-    private void manejarMovimiento(UnCliente cliente, String nombreOponente, String sFila, String sColumna) throws IOException {
+    public void manejarMovimiento(UnCliente cliente, String nombreOponente, String sFila, String sColumna) throws IOException {
         String clienteNombre = cliente.getNombreCliente();
 
         JuegoGato juego = getJuegoActivo(clienteNombre, nombreOponente);
@@ -160,7 +137,7 @@ public class ControladorJuego {
         }
     }
 
-    private void manejarRespuestaRevancha(UnCliente cliente, String nombreOponente, boolean acepta) throws IOException {
+    public void manejarRespuestaRevancha(UnCliente cliente, String nombreOponente, boolean acepta) throws IOException {
         String nombreCliente = cliente.getNombreCliente();
 
         JuegoGato juegoAnterior = juegosRevanchaPendiente.getOrDefault(nombreCliente, Collections.emptyMap()).get(nombreOponente);
@@ -295,7 +272,7 @@ public class ControladorJuego {
 
                     BDusuarios.registrarResultadoPartida(jugador1, jugador2, ganador);
                 } else {
-                    // Si el oponente también se desconectó, no se registra nada, la partida ya se limpia
+
                 }
 
                 removerJuegoDeActivos(nombreDesconectado, nombreOponente);
@@ -322,17 +299,5 @@ public class ControladorJuego {
             }
         }
         removerAceptacion(nombreDesconectado, null);
-    }
-
-    public Set<String> getOponentesActivos(String clienteNombre) {
-        Set<String> oponentes = new HashSet<>();
-
-        Map<String, JuegoGato> juegosDelCliente = juegosActivos.get(clienteNombre);
-        if (juegosDelCliente != null) oponentes.addAll(juegosDelCliente.keySet());
-
-        Map<String, JuegoGato> revanchasDelCliente = juegosRevanchaPendiente.get(clienteNombre);
-        if (revanchasDelCliente != null) oponentes.addAll(revanchasDelCliente.keySet());
-
-        return oponentes;
     }
 }
