@@ -137,7 +137,7 @@ public class JuegoGato {
         String infoX = jugadorX.getNombreCliente() + " (X)";
         String infoO = jugadorO.getNombreCliente() + " (O)";
         String mensajeGeneral = "Sistema Gato: ¡Juego iniciado! " + infoX + " vs " + infoO + ".\n";
-        String mensajeTurno = "Turno de " + turnoActual.getNombreCliente() + " (" + getSimbolo(turnoActual) + "). Usa /move <oponente> 1 3";
+        String mensajeTurno = "Turno de " + turnoActual.getNombreCliente() + " (" + getSimbolo(turnoActual) + "). Usa /move 1 3";
 
         jugadorX.enviarMensaje(mensajeGeneral + "Tú eres X." + dibujarTablero() + mensajeTurno);
         jugadorO.enviarMensaje(mensajeGeneral + "Tú eres O." + dibujarTablero() + mensajeTurno);

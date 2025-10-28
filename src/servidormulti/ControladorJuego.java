@@ -137,13 +137,17 @@ public class ControladorJuego {
     private void solicitarRevancha(UnCliente clienteQueMovio, JuegoGato juego, String nombreOponente) throws IOException {
         String nombreCliente = clienteQueMovio.getNombreCliente();
         UnCliente oponente = servidor.getCliente(nombreOponente);
+
         removerJuegoDeActivos(nombreCliente, nombreOponente);
+
         juegosRevanchaPendiente.computeIfAbsent(nombreCliente, k -> Collections.synchronizedMap(new HashMap<>())).put(nombreOponente, juego);
         juegosRevanchaPendiente.computeIfAbsent(nombreOponente, k -> Collections.synchronizedMap(new HashMap<>())).put(nombreCliente, juego);
+
         UnCliente ganador = juego.getGanador();
 
         if (ganador != null) {
             UnCliente perdedor = (ganador == clienteQueMovio) ? oponente : clienteQueMovio;
+
             ganador.enviarMensaje("Sistema Gato: ¡Ganaste contra " + perdedor.getNombreCliente() + "! ¿Quieres la revancha? Usa /si " + perdedor.getNombreCliente() + " o /no " + perdedor.getNombreCliente() + ".");
             if (perdedor != null) {
                 perdedor.enviarMensaje("Sistema Gato: Perdiste contra " + ganador.getNombreCliente() + ". ¿Quieres la revancha? Responde con /si " + ganador.getNombreCliente() + " o /no " + ganador.getNombreCliente() + ".");
@@ -176,11 +180,14 @@ public class ControladorJuego {
         }
 
         if (acepta) {
+
             revanchaAceptada.computeIfAbsent(nombreCliente, k -> Collections.synchronizedSet(new HashSet<>())).add(nombreOponente);
+
             boolean oponenteYaAcepto = revanchaAceptada.getOrDefault(nombreOponente, Collections.emptySet()).contains(nombreCliente);
 
             if (oponenteYaAcepto) {
                 iniciarJuego(cliente, oponente);
+
                 removerJuegoDeRevanchaPendiente(nombreCliente, nombreOponente);
                 removerAceptacion(nombreCliente, nombreOponente);
                 removerAceptacion(nombreOponente, nombreCliente);
@@ -200,6 +207,7 @@ public class ControladorJuego {
             removerAceptacion(nombreOponente, nombreCliente);
         }
     }
+
     public void removerJuego(String nombre1, String nombre2) {
         removerJuegoDeActivos(nombre1, nombre2);
         removerJuegoDeRevanchaPendiente(nombre1, nombre2);
@@ -277,9 +285,19 @@ public class ControladorJuego {
 
                 juego.finalizarPorAbandono(desconectado);
 
+                String ganador = null;
                 if(oponente != null) {
-                    oponente.enviarMensaje("Sistema Gato: La partida contra " + nombreDesconectado + " ha finalizado por desconexión.");
+                    ganador = oponente.getNombreCliente();
+                    oponente.enviarMensaje("Sistema Gato: La partida contra " + nombreDesconectado + " ha finalizado por desconexión. ¡Has ganado por abandono!");
+
+                    String jugador1 = juego.getJugadorX().getNombreCliente();
+                    String jugador2 = juego.getJugadorO().getNombreCliente();
+
+                    BDusuarios.registrarResultadoPartida(jugador1, jugador2, ganador);
+                } else {
+                    // Si el oponente también se desconectó, no se registra nada, la partida ya se limpia
                 }
+
                 removerJuegoDeActivos(nombreDesconectado, nombreOponente);
             }
         }
