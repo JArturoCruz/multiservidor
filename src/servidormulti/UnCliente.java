@@ -1,9 +1,13 @@
 package servidormulti;
 import mensaje.Mensaje;
+import bd.BDusuarios;
+import bd.BDusuarios.RankingEntry;
 
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class UnCliente implements Runnable {
@@ -97,6 +101,8 @@ public class UnCliente implements Runnable {
         enviarMensaje("Sistema: - Responder propuesta: /accept <proponente> o /reject <proponente>");
         enviarMensaje("Sistema: - Mover: /move <oponente> <fila> <columna> (ej: /move [NombreOponente] 1 3)");
         enviarMensaje("Sistema: - Revancha: /si <oponente> o /no <oponente> (al finalizar un juego).");
+        enviarMensaje("Sistema: - Ranking: /ranking (Muestra los 10 mejores jugadores)");
+        enviarMensaje("Sistema: - Historial VS: /vs <usuario> (Muestra estadísticas contra otro jugador)");
     }
 
     private void manejarDesconexion() {
@@ -142,6 +148,14 @@ public class UnCliente implements Runnable {
         if (comando.equals("/move") || comando.equals("/gato") || comando.equals("/accept") || comando.equals("/reject") || comando.equals("/si") || comando.equals("/no")) {
             controladorJuego.manejarComando(mensaje, this);
         }
+        // Comandos de Ranking (Permitidos siempre)
+        else if (comando.equals("/ranking")) {
+            manejarRanking();
+        }
+        else if (comando.equals("/vs")) {
+            String[] partes = mensaje.split(" ", 2);
+            manejarVs(partes.length > 1 ? partes[1].trim() : "");
+        }
         // Restricción de otras acciones si está jugando o en revancha
         else if (estaEnInteraccionJuego) {
 
@@ -152,14 +166,13 @@ public class UnCliente implements Runnable {
                 Set<String> oponentes = controladorJuego.getOponentesActivos(nombreCliente);
 
                 if (oponentes.contains(nombreDestino)) {
-                    // LLAMADA CORREGIDA: Usar Mensaje.enviarMensajePrivadoEntreJugadores
                     Mensaje.enviarMensajePrivadoEntreJugadores(mensaje, this, nombreDestino, servidor);
                 } else {
                     enviarMensaje("Sistema: Solo puedes enviar mensajes privados a tus oponentes activos mientras juegas.");
                 }
             }
             else if (comando.startsWith("/")) {
-                enviarMensaje("Sistema: Acción bloqueada. Solo se permiten comandos de juego (/move, /si, /no, /gato, /accept, /reject) y chat privado (@oponente) mientras estás en partida/revancha.");
+                enviarMensaje("Sistema: Acción bloqueada. Solo se permiten comandos de juego, ranking (/ranking, /vs) y chat privado (@oponente) mientras estás en partida/revancha.");
             }
             else {
                 enviarMensaje("Sistema: Chat público bloqueado. Usa @<oponente> <mensaje> para hablar con tu oponente.");
@@ -177,6 +190,82 @@ public class UnCliente implements Runnable {
             manejarMensajeAutenticado(mensaje);
         }
     }
+
+    //---------------------------------------------------------
+    // NUEVOS MÉTODOS DE RANKING Y VS
+    //---------------------------------------------------------
+
+    private void manejarRanking() throws IOException {
+        List<RankingEntry> ranking = BDusuarios.obtenerRankingGeneral();
+
+        if (ranking.isEmpty()) {
+            enviarMensaje("Sistema Ranking: No hay datos de ranking disponibles.");
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder("\n--- RANKING GATO ---\n");
+        sb.append(String.format("%-4s %-15s %-7s %-7s %-7s %s\n", "POS", "USUARIO", "PTS", "V", "E", "D"));
+        sb.append("---------------------------------------------------\n");
+
+        int limite = Math.min(ranking.size(), 10); // Mostrar solo los 10 primeros
+        for (int i = 0; i < limite; i++) {
+            RankingEntry entry = ranking.get(i);
+            sb.append(String.format("%-4d %-15s %-7d %-7d %-7d %d\n",
+                    i + 1,
+                    entry.username,
+                    entry.points,
+                    entry.victories,
+                    entry.ties,
+                    entry.defeats));
+        }
+        sb.append("---------------------------------------------------\n");
+        enviarMensaje(sb.toString());
+    }
+
+    private void manejarVs(String oponenteNombre) throws IOException {
+        String miNombre = getNombreCliente(); // CORRECCIÓN: Se usa getNombreCliente()
+
+        if (oponenteNombre.isEmpty()) {
+            enviarMensaje("Sistema VS: Uso incorrecto. Usa: /vs <nombre_usuario>");
+            return;
+        }
+        if (miNombre.equalsIgnoreCase(oponenteNombre)) {
+            enviarMensaje("Sistema VS: No puedes ver estadísticas VS contra ti mismo. ¿Estás aburrido?");
+            return;
+        }
+        if (!BDusuarios.UsuarioExistente(oponenteNombre)) {
+            enviarMensaje("Sistema VS: El usuario '" + oponenteNombre + "' no existe.");
+            return;
+        }
+
+        Map<String, Integer> stats = BDusuarios.obtenerEstadisticasVs(miNombre, oponenteNombre);
+        int total = stats.get("total");
+
+        if (total == 0) {
+            enviarMensaje("Sistema VS: Nunca has jugado contra '" + oponenteNombre + "'.");
+            return;
+        }
+
+        int miWins = stats.get(miNombre + "_wins");
+        int oponenteWins = stats.get(oponenteNombre + "_wins");
+        int ties = stats.get("ties");
+
+        double miWinRate = (double) miWins / total * 100;
+        double oponenteWinRate = (double) oponenteWins / total * 100;
+
+        StringBuilder sb = new StringBuilder("\n--- ESTADÍSTICAS VS: " + miNombre + " vs " + oponenteNombre + " ---\n");
+        sb.append(String.format("Total Partidas: %d\n", total));
+        sb.append("---------------------------------------------------\n");
+        sb.append(String.format("%-15s | %-15s\n", miNombre, oponenteNombre));
+        sb.append("---------------------------------------------------\n");
+        sb.append(String.format("%-15s | %-15s\n", miWins + " Victorias", oponenteWins + " Victorias"));
+        sb.append(String.format("%-15s | %-15s\n", String.format("%.2f%%", miWinRate), String.format("%.2f%%", oponenteWinRate)));
+        sb.append(String.format("Empates: %d\n", ties));
+        sb.append("---------------------------------------------------\n");
+
+        enviarMensaje(sb.toString());
+    }
+
 
     @Override
     public void run() {

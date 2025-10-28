@@ -7,18 +7,19 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.HashSet;
+import bd.BDusuarios;
 
 public class ControladorJuego {
     private final Map<String, Map<String, JuegoGato>> juegosActivos;
     private final Map<String, Map<String, JuegoGato>> juegosRevanchaPendiente;
-    private final Map<String, Set<String>> revanchaAceptada; // NUEVO: Cliente -> Oponentes que ha aceptado revancha
+    private final Map<String, Set<String>> revanchaAceptada;
     private final ServidorMulti servidor;
     private final GestorPropuestas gestorPropuestas;
 
     public ControladorJuego(ServidorMulti servidor) {
         this.juegosActivos = Collections.synchronizedMap(new HashMap<>());
         this.juegosRevanchaPendiente = Collections.synchronizedMap(new HashMap<>());
-        this.revanchaAceptada = Collections.synchronizedMap(new HashMap<>()); // Inicialización
+        this.revanchaAceptada = Collections.synchronizedMap(new HashMap<>());
         this.servidor = servidor;
         this.gestorPropuestas = new GestorPropuestas(servidor, this);
     }
@@ -120,6 +121,12 @@ public class ControladorJuego {
             boolean juegoTerminado = juego.realizarMovimiento(cliente, fila, columna);
 
             if (juegoTerminado) {
+                String ganador = juego.getGanador() != null ? juego.getGanador().getNombreCliente() : null;
+                String jugador1 = juego.getJugadorX().getNombreCliente();
+                String jugador2 = juego.getJugadorO().getNombreCliente();
+
+                BDusuarios.registrarResultadoPartida(jugador1, jugador2, ganador);
+
                 solicitarRevancha(cliente, juego, nombreOponente);
             }
         } catch (NumberFormatException e) {
@@ -130,17 +137,13 @@ public class ControladorJuego {
     private void solicitarRevancha(UnCliente clienteQueMovio, JuegoGato juego, String nombreOponente) throws IOException {
         String nombreCliente = clienteQueMovio.getNombreCliente();
         UnCliente oponente = servidor.getCliente(nombreOponente);
-
         removerJuegoDeActivos(nombreCliente, nombreOponente);
-
         juegosRevanchaPendiente.computeIfAbsent(nombreCliente, k -> Collections.synchronizedMap(new HashMap<>())).put(nombreOponente, juego);
         juegosRevanchaPendiente.computeIfAbsent(nombreOponente, k -> Collections.synchronizedMap(new HashMap<>())).put(nombreCliente, juego);
-
         UnCliente ganador = juego.getGanador();
 
         if (ganador != null) {
             UnCliente perdedor = (ganador == clienteQueMovio) ? oponente : clienteQueMovio;
-
             ganador.enviarMensaje("Sistema Gato: ¡Ganaste contra " + perdedor.getNombreCliente() + "! ¿Quieres la revancha? Usa /si " + perdedor.getNombreCliente() + " o /no " + perdedor.getNombreCliente() + ".");
             if (perdedor != null) {
                 perdedor.enviarMensaje("Sistema Gato: Perdiste contra " + ganador.getNombreCliente() + ". ¿Quieres la revancha? Responde con /si " + ganador.getNombreCliente() + " o /no " + ganador.getNombreCliente() + ".");
@@ -156,7 +159,6 @@ public class ControladorJuego {
     private void manejarRespuestaRevancha(UnCliente cliente, String nombreOponente, boolean acepta) throws IOException {
         String nombreCliente = cliente.getNombreCliente();
 
-        // El juego solo se remueve al aceptar ambos o rechazar uno.
         JuegoGato juegoAnterior = juegosRevanchaPendiente.getOrDefault(nombreCliente, Collections.emptyMap()).get(nombreOponente);
 
         if (juegoAnterior == null) {
@@ -173,27 +175,22 @@ public class ControladorJuego {
             return;
         }
 
-        if (acepta) { // Cliente respondió /si
-
+        if (acepta) {
             revanchaAceptada.computeIfAbsent(nombreCliente, k -> Collections.synchronizedSet(new HashSet<>())).add(nombreOponente);
-
             boolean oponenteYaAcepto = revanchaAceptada.getOrDefault(nombreOponente, Collections.emptySet()).contains(nombreCliente);
 
             if (oponenteYaAcepto) {
-                // Ambos aceptaron!
                 iniciarJuego(cliente, oponente);
-
                 removerJuegoDeRevanchaPendiente(nombreCliente, nombreOponente);
                 removerAceptacion(nombreCliente, nombreOponente);
                 removerAceptacion(nombreOponente, nombreCliente);
 
             } else {
-                // Esperando al oponente
                 cliente.enviarMensaje("Sistema Gato: Has aceptado la revancha contra " + nombreOponente + ". Esperando la respuesta de " + nombreOponente + ".");
                 oponente.enviarMensaje("Sistema Gato: " + nombreCliente + " ha aceptado la revancha. Responde con /si " + nombreCliente + " o /no " + nombreCliente + " para empezar.");
             }
 
-        } else { // Cliente respondió /no
+        } else {
 
             cliente.enviarMensaje("Sistema Gato: Revancha rechazada. Partida finalizada contra " + nombreOponente + ".");
             oponente.enviarMensaje("Sistema Gato: " + nombreCliente + " rechazó la revancha. Partida finalizada.");
@@ -203,7 +200,6 @@ public class ControladorJuego {
             removerAceptacion(nombreOponente, nombreCliente);
         }
     }
-
     public void removerJuego(String nombre1, String nombre2) {
         removerJuegoDeActivos(nombre1, nombre2);
         removerJuegoDeRevanchaPendiente(nombre1, nombre2);
@@ -211,11 +207,13 @@ public class ControladorJuego {
 
     private void removerAceptacion(String nombre1, String nombre2) {
         Set<String> aceptaciones1 = revanchaAceptada.get(nombre1);
-        if (aceptaciones1 != null) {
+        if (aceptaciones1 != null && nombre2 != null) {
             aceptaciones1.remove(nombre2);
             if (aceptaciones1.isEmpty()) {
                 revanchaAceptada.remove(nombre1);
             }
+        } else if (nombre2 == null && aceptaciones1 != null) {
+            revanchaAceptada.remove(nombre1);
         }
     }
 
@@ -305,7 +303,6 @@ public class ControladorJuego {
                 removerAceptacion(nombreOponente, nombreDesconectado);
             }
         }
-        // Limpiar aceptaciones enviadas por el desconectado (si el oponente no ha respondido)
         removerAceptacion(nombreDesconectado, null);
     }
 
