@@ -1,6 +1,5 @@
 package servidormulti;
 
-import bd.BDusuarios;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
