@@ -11,190 +11,159 @@ import java.util.stream.Collectors;
 
 public class Mensaje {
 
-    private static String formatearMensajePrivado(String remitenteNombre, String contenido) {
-        return "(Privado de " + remitenteNombre + "): " + contenido;
-    }
-
-    private static String formatearConfirmacionPrivada(String destinatarios, String contenido) {
-        return "(Mensaje privado para " + destinatarios + "): " + contenido;
-    }
-
     public static boolean procesar(String mensaje, UnCliente remitente, ServidorMulti servidor) throws IOException {
+        if (mensaje.trim().isEmpty()) {
+            remitente.enviarMensaje("Sistema: No puedes enviar un mensaje vacío.");
+            return false;
+        }
         if (mensaje.startsWith("@")) {
             return enviarMensajePrivado(mensaje, remitente, servidor);
         } else {
-            // Es un mensaje de grupo
             return difundirMensajeGrupo(mensaje, remitente, servidor);
         }
     }
 
-    public static void enviarMensajePrivadoEntreJugadores(String mensaje, UnCliente remitente, String nombreDestino, ServidorMulti servidor) throws IOException {
-        UnCliente clienteDestino = servidor.getCliente(nombreDestino);
+    private static boolean difundirMensajeGrupo(String msg, UnCliente r, ServidorMulti s) throws IOException {
+        long newMsgId = BDusuarios.guardarMensajeGrupo(r.getCurrentGroupId(), r.getNombreCliente(), msg);
+        if (newMsgId == -1) {
+            r.enviarMensaje("Sistema: Error interno al guardar el mensaje.");
+            return false;
+        }
 
-        if (clienteDestino != null) {
-            String mensajeParaDestinatarios = formatearMensajePrivado(remitente.getNombreCliente(), mensaje);
-            clienteDestino.enviarMensaje(mensajeParaDestinatarios);
+        BDusuarios.actualizarUltimoMensajeVisto(r.getNombreCliente(), r.getCurrentGroupId(), newMsgId);
+        r.enviarMensaje("(Mensaje enviado a " + r.getCurrentGroupName() + ")");
 
-            String mensajeConfirmacion = formatearConfirmacionPrivada(nombreDestino, mensaje);
-            remitente.enviarMensaje(mensajeConfirmacion);
+        String msgFmt = "[" + r.getCurrentGroupName() + "] " + r.getNombreCliente() + ": " + msg;
+        Collection<UnCliente> destinatarios = obtenerDestinatariosOnline(r.getCurrentGroupId(), s);
+
+        enviarADestinatariosDeGrupo(destinatarios, r, msgFmt, newMsgId);
+        return true;
+    }
+
+    private static Collection<UnCliente> obtenerDestinatariosOnline(int gId, ServidorMulti s) {
+        if (gId == BDusuarios.ID_TODOS) {
+            return s.getTodosLosClientes();
         } else {
-            remitente.enviarMensaje("Sistema: Error interno. El oponente (" + nombreDestino + ") no está conectado.");
+            List<String> miembros = BDusuarios.obtenerMiembrosGrupo(gId);
+            return miembros.stream()
+                    .map(s::getCliente)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
         }
     }
 
-    private static boolean validarMensajePrivado(String mensajePrivado, UnCliente remitente) throws IOException {
-        if (mensajePrivado.isEmpty()) {
-            remitente.enviarMensaje("Sistema: No puedes enviar un mensaje privado vacío.");
+    private static void enviarADestinatariosDeGrupo(Collection<UnCliente> destinatarios, UnCliente r, String msgFmt, long newMsgId) {
+        for (UnCliente d : destinatarios) {
+            if (d == r || d.getCurrentGroupId() != r.getCurrentGroupId()) continue;
+
+            boolean bloqueado = BDusuarios.estaBloqueado(d.getNombreCliente(), r.getNombreCliente()) ||
+                    BDusuarios.estaBloqueado(r.getNombreCliente(), d.getNombreCliente());
+
+            if (!bloqueado) {
+                try {
+                    d.enviarMensaje(msgFmt);
+                    BDusuarios.actualizarUltimoMensajeVisto(d.getNombreCliente(), d.getCurrentGroupId(), newMsgId);
+                } catch (IOException e) {
+                }
+            }
+        }
+    }
+
+    private static boolean enviarMensajePrivado(String msgCompleto, UnCliente r, ServidorMulti s) throws IOException {
+        if (!r.isAutenticado()) {
+            r.enviarMensaje("Sistema: Los invitados no pueden enviar mensajes privados. Regístrate.");
             return false;
         }
+
+        String[] partes = msgCompleto.split(" ", 2);
+        String destinatariosStr = partes[0].substring(1);
+        String msgPrivado = (partes.length > 1) ? partes[1] : "";
+
+        if (msgPrivado.isEmpty()) {
+            r.enviarMensaje("Sistema: No puedes enviar un mensaje privado vacío.");
+            return false;
+        }
+
+        String msgFmt = formatearMensajePrivado(r.getNombreCliente(), msgPrivado);
+        enviarAClientesPrivados(r, destinatariosStr, msgFmt, s, msgPrivado);
         return true;
     }
 
-    private static void enviarAClientes(UnCliente remitente, String destinatariosStr, String mensajeParaDestinatarios, ServidorMulti servidor) throws IOException {
-        String[] destinatarios = destinatariosStr.split(",");
-        StringBuilder destinatariosEnviados = new StringBuilder();
-        boolean alMenosUnoEnviado = false;
+    private static void enviarAClientesPrivados(UnCliente r, String destStr, String msgFmt, ServidorMulti s, String contenido) throws IOException {
+        String[] destinatarios = destStr.split(",");
+        StringBuilder enviadosConExito = new StringBuilder();
 
-        for (String dest : destinatarios) {
-            String nombreDestinatario = dest.trim();
-            alMenosUnoEnviado = procesarDestinatarioPrivado(remitente, nombreDestinatario, mensajeParaDestinatarios, servidor, destinatariosEnviados) || alMenosUnoEnviado;
+        for (String destNombre : destinatarios) {
+            if (procesarDestinatarioPrivado(r, destNombre.trim(), msgFmt, s)) {
+                if (enviadosConExito.length() > 0) enviadosConExito.append(", ");
+                enviadosConExito.append(destNombre.trim());
+            }
         }
 
-        if (alMenosUnoEnviado) {
-            String contenidoMensaje = mensajeParaDestinatarios.substring(mensajeParaDestinatarios.indexOf("): ") + 3);
-            String mensajeConfirmacion = formatearConfirmacionPrivada(destinatariosEnviados.toString(), contenidoMensaje);
-            remitente.enviarMensaje(mensajeConfirmacion);
+        if (enviadosConExito.length() > 0) {
+            r.enviarMensaje(formatearConfirmacionPrivada(enviadosConExito.toString(), contenido));
         }
     }
 
-    private static boolean procesarDestinatarioPrivado(UnCliente remitente, String nombreDestinatario, String mensajeParaDestinatarios, ServidorMulti servidor, StringBuilder destinatariosEnviados) throws IOException {
-        UnCliente clienteDestino = servidor.getCliente(nombreDestinatario);
-        String remitenteNombre = remitente.getNombreCliente();
-
-        if (clienteDestino == null) {
-            remitente.enviarMensaje("Sistema: El usuario '" + nombreDestinatario + "' no está conectado o no existe.");
+    private static boolean procesarDestinatarioPrivado(UnCliente r, String dNombre, String msgFmt, ServidorMulti s) throws IOException {
+        UnCliente d = s.getCliente(dNombre);
+        if (d == null) {
+            r.enviarMensaje("Sistema: El usuario '" + dNombre + "' no está conectado o no existe.");
+            return false;
+        }
+        if (!d.isAutenticado()) {
+            r.enviarMensaje("Sistema: Los mensajes privados solo son para usuarios autenticados.");
+            return false;
+        }
+        if (esBloqueoBidireccional(dNombre, r.getNombreCliente(), r)) {
             return false;
         }
 
-        // Los invitados (anónimos) no pueden enviar ni recibir PMs, excepto si es de juego
-        if (!remitente.isAutenticado() || !clienteDestino.isAutenticado()) {
-            remitente.enviarMensaje("Sistema: Los mensajes privados solo están permitidos entre usuarios autenticados.");
-            return false;
-        }
-
-        if (esBloqueoBidireccional(nombreDestinatario, remitenteNombre, remitente)) {
-            return false;
-        }
-
-        clienteDestino.enviarMensaje(mensajeParaDestinatarios);
-        if (destinatariosEnviados.length() > 0) destinatariosEnviados.append(", ");
-        destinatariosEnviados.append(nombreDestinatario);
+        d.enviarMensaje(msgFmt);
         return true;
     }
 
-    private static boolean esBloqueoBidireccional(String nombre1, String nombre2, UnCliente notificador) throws IOException {
-        // Los anónimos no pueden ser bloqueados
-        if (nombre1.startsWith("anonimo") || nombre2.startsWith("anonimo")) return false;
+    private static boolean esBloqueoBidireccional(String dNombre, String rNombre, UnCliente notificador) throws IOException {
+        if (dNombre.startsWith("anonimo") || rNombre.startsWith("anonimo")) return false;
 
-        boolean bloqueadoPorDestino = BDusuarios.estaBloqueado(nombre1, nombre2);
-        boolean bloqueadoPorRemitente = BDusuarios.estaBloqueado(nombre2, nombre1);
+        boolean bloqueadoPorDestino = BDusuarios.estaBloqueado(dNombre, rNombre);
+        boolean bloqueadoPorRemitente = BDusuarios.estaBloqueado(rNombre, dNombre);
 
         if (bloqueadoPorDestino || bloqueadoPorRemitente) {
             String razon = bloqueadoPorDestino ? "El usuario te tiene bloqueado." : "Tienes bloqueado al usuario.";
-            notificador.enviarMensaje("Sistema: Error al enviar mensaje privado a '" + nombre1 + "'. " + razon);
+            notificador.enviarMensaje("Sistema: Error al enviar mensaje privado a '" + dNombre + "'. " + razon);
             return true;
         }
         return false;
     }
 
-    private static boolean enviarMensajePrivado(String mensajeCompleto, UnCliente remitente, ServidorMulti servidor) throws IOException {
-        // Los invitados no pueden enviar PM
-        if (!remitente.isAutenticado()) {
-            remitente.enviarMensaje("Sistema: Los invitados no pueden enviar mensajes privados. Regístrate.");
-            return false;
-        }
-
-        String[] partes = mensajeCompleto.split(" ", 2);
-        String destinatariosStr = partes[0].substring(1);
-        String mensajePrivado = (partes.length > 1) ? partes[1] : "";
-
-        if (!validarMensajePrivado(mensajePrivado, remitente)) return false;
-        String mensajeParaDestinatarios = formatearMensajePrivado(remitente.getNombreCliente(), mensajePrivado);
-        enviarAClientes(remitente, destinatariosStr, mensajeParaDestinatarios, servidor);
-        return true;
-    }
-
-    // --- MÉTODO REESCRITO PARA GRUPOS ---
-    private static boolean difundirMensajeGrupo(String mensaje, UnCliente remitente, ServidorMulti servidor) throws IOException {
-        int groupId = remitente.getCurrentGroupId();
-        String groupName = remitente.getCurrentGroupName();
-        String senderName = remitente.getNombreCliente();
-
-        // 1. Guardar mensaje en la BD
-        long newMsgId = BDusuarios.guardarMensajeGrupo(groupId, senderName, mensaje);
-        if (newMsgId == -1) {
-            remitente.enviarMensaje("Sistema: Error interno al guardar el mensaje.");
-            return false;
-        }
-
-        // 2. Formatear mensaje
-        String msgFmt = "[" + groupName + "] " + senderName + ": " + mensaje;
-
-        // 3. Actualizar el "visto" del remitente y enviarle confirmación
-        BDusuarios.actualizarUltimoMensajeVisto(senderName, groupId, newMsgId);
-        remitente.enviarMensaje("(Mensaje enviado a " + groupName + ")");
-
-        // 4. Obtener todos los destinatarios online
-        Collection<UnCliente> destinatariosOnline;
-        if (groupId == BDusuarios.ID_TODOS) {
-            // "Todos" incluye a todos los conectados (autenticados y anónimos)
-            destinatariosOnline = servidor.getTodosLosClientes();
+    public static void enviarMensajePrivadoEntreJugadores(String msg, UnCliente r, String dNombre, ServidorMulti s) throws IOException {
+        UnCliente d = s.getCliente(dNombre);
+        if (d != null) {
+            d.enviarMensaje(formatearMensajePrivado(r.getNombreCliente(), msg));
+            r.enviarMensaje(formatearConfirmacionPrivada(dNombre, msg));
         } else {
-            // Otros grupos solo incluyen miembros autenticados
-            List<String> miembros = BDusuarios.obtenerMiembrosGrupo(groupId);
-            destinatariosOnline = miembros.stream()
-                    .map(servidor::getCliente)
-                    .filter(Objects::nonNull) // Filtrar usuarios que no están online
-                    .collect(Collectors.toList());
-        }
-
-        // 5. Enviar mensaje a los destinatarios
-        for (UnCliente cliente : destinatariosOnline) {
-            if (cliente == remitente) continue; // No reenviar al remitente
-
-            // Solo enviar si el cliente está actualmente en ese grupo
-            if (cliente.getCurrentGroupId() == groupId) {
-                // Verificar bloqueo (los anónimos no pueden bloquear ni ser bloqueados)
-                if (!BDusuarios.estaBloqueado(cliente.getNombreCliente(), senderName) &&
-                        !BDusuarios.estaBloqueado(senderName, cliente.getNombreCliente())) {
-
-                    cliente.enviarMensaje(msgFmt);
-                    // Actualizar el "visto" del receptor
-                    BDusuarios.actualizarUltimoMensajeVisto(cliente.getNombreCliente(), groupId, newMsgId);
-                }
-            }
-            // Si el cliente está online pero en otro grupo,
-            // recibirá el mensaje cuando haga '/join' a este grupo.
-        }
-        return true;
-    }
-
-
-    private static void iterarYNotificar(String notificacion, UnCliente clienteExcluido, ServidorMulti servidor) {
-        // Las notificaciones del sistema (como unirse/salir) solo van al grupo "Todos"
-        for (UnCliente cliente : servidor.getTodosLosClientes()) {
-            try {
-                if (cliente != clienteExcluido && cliente.getCurrentGroupId() == BDusuarios.ID_TODOS) {
-                    cliente.enviarMensaje("Sistema: " + notificacion);
-                }
-            } catch (IOException e) {
-                // Ignorar error al notificar
-            }
+            r.enviarMensaje("Sistema: Error interno. El oponente (" + dNombre + ") no está conectado.");
         }
     }
+
 
     public static void notificarATodos(String notificacion, UnCliente clienteExcluido, ServidorMulti servidor) {
         System.out.println(notificacion);
-        iterarYNotificar(notificacion, clienteExcluido, servidor);
+        for (UnCliente cliente : servidor.getTodosLosClientes()) {
+            if (cliente != clienteExcluido && cliente.getCurrentGroupId() == BDusuarios.ID_TODOS) {
+                intentarEnviarNotificacion(cliente, notificacion);
+            }
+        }
     }
+
+    private static void intentarEnviarNotificacion(UnCliente cliente, String notificacion) {
+        try {
+            cliente.enviarMensaje("Sistema: " + notificacion);
+        } catch (IOException e) {
+        }
+    }
+
+    private static String formatearMensajePrivado(String r, String c) { return "(Privado de " + r + "): " + c; }
+    private static String formatearConfirmacionPrivada(String d, String c) { return "(Mensaje privado para " + d + "): " + c; }
 }
