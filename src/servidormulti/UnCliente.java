@@ -104,14 +104,15 @@ public class UnCliente implements Runnable {
         enviarMensaje("Sistema: Los usuarios autenticados pueden usar:");
         enviarMensaje("Sistema: - '/glist' (Ver todos los grupos)");
         enviarMensaje("Sistema: - '/gcreate <nombre_grupo>' (Crear un grupo)");
-        enviarMensaje("Sistema: - '/gdelete <nombre_grupo>' (Borrar un grupo si eres el creador - *funcionalidad simplificada: cualquiera puede borrar*)");
+        enviarMensaje("Sistema: - '/gdelete <nombre_grupo>' (Borrar un grupo)");
         enviarMensaje("Sistema: - '/join <nombre_grupo>' (Unirse y cambiar a un grupo)");
         enviarMensaje("Sistema: - '/block <usuario>' y '/unblock <usuario>'");
         enviarMensaje("Sistema: Juega al Gato (comandos /gato, /accept, /move, /ranking, /vs, etc.)");
+        enviarMensaje("Sistema: REGLA: Solo puedes jugar al Gato con usuarios en tu mismo grupo actual.");
     }
 
     private void enviarMensajesPendientes() throws IOException {
-        if (!autenticado) return; // Los anónimos no tienen historial
+        if (!autenticado) return;
 
         List<BDusuarios.MensajeGrupo> mensajes = BDusuarios.obtenerMensajesNoVistos(this.nombreCliente, this.currentGroupId);
         if (mensajes.isEmpty()) {
@@ -186,6 +187,15 @@ public class UnCliente implements Runnable {
         }
     }
 
+    private String obtenerOponenteDeComando(String mensaje) {
+        String[] partes = mensaje.split(" ", 3);
+        if (partes.length >= 2) {
+            return partes[1].trim();
+        }
+        return null;
+    }
+
+
     private void procesarMensajeAutenticado(String mensaje, String comando) throws IOException {
 
         boolean estaEnInteraccionJuego = controladorJuego.estaJugando(nombreCliente) || controladorJuego.tieneRevanchaPendiente(nombreCliente);
@@ -204,8 +214,32 @@ public class UnCliente implements Runnable {
         }
 
         else if (comando.equals("/move") || comando.equals("/gato") || comando.equals("/accept") || comando.equals("/reject") || comando.equals("/si") || comando.equals("/no")) {
+
+            if (comando.equals("/gato") || comando.equals("/accept")) {
+                String oponenteNombre = obtenerOponenteDeComando(mensaje);
+
+                if (oponenteNombre == null) {
+                    enviarMensaje("Sistema: Formato incorrecto. Uso: " + comando + " <usuario>");
+                    return;
+                }
+
+                UnCliente oponente = servidor.getCliente(oponenteNombre);
+
+                if (oponente == null) {
+                    enviarMensaje("Sistema: El usuario '" + oponenteNombre + "' no está conectado.");
+                    return;
+                }
+
+                if (this.getCurrentGroupId() != oponente.getCurrentGroupId()) {
+                    enviarMensaje("Sistema: Solo puedes proponer o aceptar partidas con usuarios que estén en tu mismo grupo actual (" + this.getCurrentGroupName() + ").");
+                    enviarMensaje("Sistema: '" + oponenteNombre + "' está en el grupo '" + oponente.getCurrentGroupName() + "'.");
+                    return;
+                }
+            }
+
             manejadorComandosJuego.manejarComando(mensaje, this);
         }
+
         else if (comando.equals("/ranking")) {
             manejarRanking();
         }
@@ -337,7 +371,6 @@ public class UnCliente implements Runnable {
         enviarMensaje(sb.toString());
     }
 
-
     private void manejarRanking() throws IOException {
         List<RankingEntry> ranking = BDusuarios.obtenerRankingGeneral();
 
@@ -411,7 +444,6 @@ public class UnCliente implements Runnable {
 
         enviarMensaje(sb.toString());
     }
-
 
     @Override
     public void run() {
