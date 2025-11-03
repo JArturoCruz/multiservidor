@@ -1,40 +1,12 @@
 package servidormulti;
 
-import bd.BDusuarios;
-import bd.BDusuarios.RankingEntry;
-
+import bd.RGrupos;
+import bd.RJuego;
+import bd.RJuego.RankingEntry;
 import java.util.List;
 import java.util.Map;
 
 public class FormateadorMensajes {
-
-    public String[] formatearBienvenida() {
-        return new String[]{
-                "Sistema: Bienvenido. Actualmente estás en el grupo: " + BDusuarios.NOMBRE_TODOS,
-                "Sistema: Como invitado, solo puedes enviar " + UnCliente.LIMITE_MENSAJES_GRATIS + " mensajes en el grupo 'Todos'.",
-                "Sistema: Usa '/register <nombre_usuario> <PIN>' o '/login <nombre_usuario> <PIN>'.",
-                "Sistema: Los usuarios autenticados pueden usar:",
-                "Sistema: - '/glist' (Ver todos los grupos)",
-                "Sistema: - '/gcreate <nombre_grupo>' (Crear un grupo)",
-                "Sistema: - '/gdelete <nombre_grupo>' (Borrar un grupo)",
-                "Sistema: - '/join <nombre_grupo>' (Unirse y cambiar a un grupo)",
-                "Sistema: - '/block <usuario>' y '/unblock <usuario>'",
-                "Sistema: Juega al Gato (comandos /gato, /accept, /move, /ranking, /vs, etc.)",
-                "Sistema: REGLA: Solo puedes jugar al Gato con usuarios en tu mismo grupo actual."
-        };
-    }
-
-    public String formatearListaGrupos(List<String> grupos) {
-        if (grupos.isEmpty()) {
-            return "Sistema: No hay grupos disponibles.";
-        }
-        StringBuilder sb = new StringBuilder("--- GRUPOS DISPONIBLES ---\n");
-        for (String grupo : grupos) {
-            sb.append("- ").append(grupo).append("\n");
-        }
-        sb.append("----------------------------");
-        return sb.toString();
-    }
 
     public String formatearRanking(List<RankingEntry> ranking) {
         if (ranking.isEmpty()) {
@@ -60,11 +32,9 @@ public class FormateadorMensajes {
         if (total == 0) {
             return "Sistema VS: Nunca han jugado " + user1 + " contra " + user2 + ".";
         }
-
         int user1Wins = stats.get(user1 + "_wins");
         int user2Wins = stats.get(user2 + "_wins");
         int ties = stats.get("ties");
-
         double user1WinRate = (double) user1Wins / total * 100;
         double user2WinRate = (double) user2Wins / total * 100;
 
@@ -77,6 +47,34 @@ public class FormateadorMensajes {
         sb.append(String.format("%-15s | %-15s\n", String.format("%.2f%%", user1WinRate), String.format("%.2f%%", user2WinRate)));
         sb.append(String.format("Empates: %d\n", ties));
         sb.append("---------------------------------------------------\n");
+        return sb.toString();
+    }
+
+    public String[] formatearBienvenida() {
+        return new String[]{
+                "Sistema: Bienvenido. Actualmente estás en el grupo: " + RGrupos.NOMBRE_TODOS,
+                "Sistema: Como invitado, solo puedes enviar " + UnCliente.LIMITE_MENSAJES_GRATIS + " mensajes en el grupo 'Todos'.",
+                "Sistema: Usa '/register <nombre_usuario> <PIN>' o '/login <nombre_usuario> <PIN>'.",
+                "Sistema: Los usuarios autenticados pueden usar:",
+                "Sistema: - '/glist' (Ver todos los grupos)",
+                "Sistema: - '/gcreate <nombre_grupo>' (Crear un grupo)",
+                "Sistema: - '/gdelete <nombre_grupo>' (Borrar un grupo)",
+                "Sistema: - '/join <nombre_grupo>' (Unirse y cambiar a un grupo)",
+                "Sistema: - '/block <usuario>' y '/unblock <usuario>'",
+                "Sistema: Juega al Gato (comandos /gato, /accept, /move, /ranking, /vs, etc.)",
+                "Sistema: REGLA: Solo puedes jugar al Gato con usuarios en tu mismo grupo actual."
+        };
+    }
+
+    public String formatearListaGrupos(List<String> grupos) {
+        if (grupos.isEmpty()) {
+            return "Sistema: No hay grupos disponibles.";
+        }
+        StringBuilder sb = new StringBuilder("--- GRUPOS DISPONIBLES ---\n");
+        for (String grupo : grupos) {
+            sb.append("- ").append(grupo).append("\n");
+        }
+        sb.append("----------------------------");
         return sb.toString();
     }
 }

@@ -1,7 +1,8 @@
 package servidormulti;
 
 import java.io.IOException;
-import bd.BDusuarios;
+import bd.RGrupos;
+import bd.RUsuarios;
 import mensaje.Mensaje;
 
 public class AutenticadorCliente {
@@ -24,7 +25,11 @@ public class AutenticadorCliente {
         String pin = partes[2];
         String oldNombreCliente = cliente.getNombreCliente();
 
-        if (!validarPin(pin) || !validarEstadoCliente(comando) || !validarNombre(nuevoNombre, oldNombreCliente)) return;
+        if (cliente.isAutenticado()) {
+            cliente.enviarMensaje("Sistema: Ya estás autenticado.");
+            return;
+        }
+        if (!validarPin(pin) || !validarNombre(nuevoNombre, oldNombreCliente)) return;
 
         if (comando.equals("/register")) {
             manejarRegistro(nuevoNombre, pin, oldNombreCliente);
@@ -49,14 +54,6 @@ public class AutenticadorCliente {
         return true;
     }
 
-    private boolean validarEstadoCliente(String comando) throws IOException {
-        if (cliente.isAutenticado()) {
-            cliente.enviarMensaje("Sistema: Ya estás autenticado. No es necesario realizar '" + comando + "'.");
-            return false;
-        }
-        return true;
-    }
-
     private boolean validarNombre(String nuevoNombre, String oldNombreCliente) throws IOException {
         if (nuevoNombre.toLowerCase().startsWith("anonimo") && !nuevoNombre.equals(oldNombreCliente)) {
             cliente.enviarMensaje("Sistema: El nombre de usuario '" + nuevoNombre + "' está reservado.");
@@ -66,9 +63,9 @@ public class AutenticadorCliente {
     }
 
     private void manejarRegistro(String nuevoNombre, String pin, String oldNombreCliente) throws IOException {
-        if (BDusuarios.UsuarioExistente(nuevoNombre)) {
+        if (RUsuarios.UsuarioExistente(nuevoNombre)) {
             cliente.enviarMensaje("Sistema: Error al registrar. El usuario '" + nuevoNombre + "' ya existe. Usa /login.");
-        } else if (BDusuarios.RegistrarUsuario(nuevoNombre, pin)) {
+        } else if (RUsuarios.RegistrarUsuario(nuevoNombre, pin)) {
             autenticacionExitosa(nuevoNombre, oldNombreCliente, nuevoNombre + " acaba de registrarse");
             cliente.enviarMensaje("Sistema:Registro completado Tu nombre ahora es '" + nuevoNombre + "'.");
         } else {
@@ -77,9 +74,9 @@ public class AutenticadorCliente {
     }
 
     private void manejarInicioSesion(String nuevoNombre, String pin, String oldNombreCliente) throws IOException {
-        if (!BDusuarios.UsuarioExistente(nuevoNombre)) {
+        if (!RUsuarios.UsuarioExistente(nuevoNombre)) {
             cliente.enviarMensaje("Sistema: Error al iniciar sesión. Usuario '" + nuevoNombre + "' no registrado. Usa /register.");
-        } else if (BDusuarios.AutenticarUsuario(nuevoNombre, pin)) {
+        } else if (RUsuarios.AutenticarUsuario(nuevoNombre, pin)) {
             autenticacionExitosa(nuevoNombre, oldNombreCliente, nuevoNombre + " ha iniciado sesion");
             cliente.enviarMensaje("Sistema:Inicio de sesión exitoso, tu nombre ahora es '" + nuevoNombre + "'.");
         } else {
@@ -92,10 +89,13 @@ public class AutenticadorCliente {
         cliente.setNombreCliente(nuevoNombre);
         servidor.agregarCliente(nuevoNombre, cliente);
 
-        cliente.setAutenticado(true);
-        cliente.resetMensajesGratisEnviados();
+        cliente.setEstadoAutenticado();
+
         Mensaje.notificarATodos(notificacion, cliente, servidor);
 
-        cliente.postAutenticacionExitosa();
+        // Cargar mensajes pendientes del grupo "Todos"
+        cliente.setCurrentGroup(RGrupos.ID_TODOS, RGrupos.NOMBRE_TODOS);
+        cliente.enviarMensaje("Sistema: Has iniciado sesión. Estás en el grupo '" + cliente.getCurrentGroupName() + "'.");
+        cliente.enviarMensajesPendientes();
     }
 }

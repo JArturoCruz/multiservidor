@@ -1,5 +1,6 @@
 package servidormulti;
 
+import bd.DatabaseManager; // <--- IMPORTACIÓN AÑADIDA
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -86,6 +87,11 @@ public class ServidorMulti {
     }
 
     public static void main(String[] args) throws IOException {
+        // --- LÍNEA AÑADIDA ---
+        // Inicializa todas las tablas de la BD antes de empezar
+        DatabaseManager.inicializarBaseDeDatos();
+        // ---------------------
+
         ServidorMulti servidor = new ServidorMulti();
         servidor.iniciarServidor(8080);
     }
