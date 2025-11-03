@@ -44,7 +44,7 @@ public class AutenticadorCliente {
         return true;
     }
 
-    private void autenticacionExitosa(String nuevoNombre, String oldNombreCliente, String notificacion) {
+    private void autenticacionExitosa(String nuevoNombre, String oldNombreCliente, String notificacion) throws IOException {
         servidor.removerCliente(oldNombreCliente);
         cliente.setNombreCliente(nuevoNombre);
         servidor.agregarCliente(nuevoNombre, cliente);
@@ -52,6 +52,8 @@ public class AutenticadorCliente {
         cliente.setAutenticado(true);
         cliente.resetMensajesGratisEnviados();
         Mensaje.notificarATodos(notificacion, cliente, servidor);
+
+        cliente.postAutenticacionExitosa();
     }
 
     private void manejarRegistro(String nuevoNombre, String pin, String oldNombreCliente) throws IOException {

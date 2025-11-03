@@ -9,12 +9,26 @@ public class ClienteMulti {
     public static void main(String[] args) throws IOException {
         Socket s = new Socket("localhost", 8080);
 
-        System.out.println("\n Instrucciones");
-        System.out.println("Actualmente eres un usuario anónimo y tienes 3 mensajes gratis.");
-        System.out.println("Para enviar un mensaje privado, usa: @usuario mensaje");
-        System.out.println("Para registrarte o iniciar sesión y establecer tu nombre, usa:");
+        System.out.println("\n--- BIENVENIDO AL CHAT ---");
+        System.out.println("Eres un invitado. Solo puedes enviar 3 mensajes en el grupo 'Todos'.");
+        System.out.println("\n--- COMANDOS BÁSICOS ---");
         System.out.println("Registrar: /register <nombre_usuario> <PIN de 4 dígitos> (Ej: /register Arturo 1234)");
         System.out.println("Iniciar Sesión: /login <nombre_usuario> <PIN de 4 dígitos> (Ej: /login Arturo 1234)");
+
+        System.out.println("\n--- COMANDOS (AUTENTICADOS) ---");
+        System.out.println("Mensaje Privado: @usuario <mensaje>");
+        System.out.println("\n--- GRUPOS (AUTENTICADOS) ---");
+        System.out.println("Ver Grupos: /glist");
+        System.out.println("Unirse a Grupo: /join <nombre_grupo> (Ej: /join Todos)");
+        System.out.println("Crear Grupo: /gcreate <nombre_grupo> (Ej: /gcreate Gaming)");
+        System.out.println("Eliminar Grupo: /gdelete <nombre_grupo>");
+
+        System.out.println("\n--- JUEGO GATO (AUTENTICADOS) ---");
+        System.out.println("Proponer: /gato <oponente>");
+        System.out.println("Aceptar/Rechazar: /accept <oponente> | /reject <oponente>");
+        System.out.println("Mover: /move <oponente> <fila> <columna> (Ej: /move Arturo 1 3)");
+        System.out.println("Ranking: /ranking | Historial: /vs <user1> <user2>");
+        System.out.println("----------------------------------\n");
 
 
         Mandar paraMandar = new Mandar(s);

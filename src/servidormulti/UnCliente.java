@@ -19,10 +19,12 @@ public class UnCliente implements Runnable {
     private boolean autenticado = false;
     private static final int LIMITE_MENSAJES_GRATIS = 3;
 
+    private int currentGroupId;
+    private String currentGroupName;
+
     private final ServidorMulti servidor;
 
     private final AutenticadorCliente autenticador;
-    private final ControladorMensajesInvitado controladorInvitado;
     private final ControladorBloqueo controladorBloqueo;
     private final ControladorJuego controladorJuego;
     private final ManejadorComandosJuego manejadorComandosJuego;
@@ -32,10 +34,12 @@ public class UnCliente implements Runnable {
         entrada = new DataInputStream(s.getInputStream());
         this.servidor = servidor;
         this.autenticador = new AutenticadorCliente(this, servidor);
-        this.controladorInvitado = new ControladorMensajesInvitado(this);
         this.controladorBloqueo = new ControladorBloqueo(this);
         this.controladorJuego = servidor.getControladorJuego();
         this.manejadorComandosJuego = new ManejadorComandosJuego(this.controladorJuego, servidor.getGestorPropuestas());
+
+        this.currentGroupId = BDusuarios.ID_TODOS;
+        this.currentGroupName = BDusuarios.NOMBRE_TODOS;
     }
 
     public void enviarMensaje(String mensaje) throws IOException {
@@ -74,37 +78,58 @@ public class UnCliente implements Runnable {
         this.mensajesGratisEnviados = 0;
     }
 
-    private void manejarMensajeAutenticado(String mensaje) throws IOException {
-        if (mensaje.trim().isEmpty()) {
-            enviarMensaje("Sistema: No puedes enviar un mensaje vacío.");
-            return;
-        }
+    public int getCurrentGroupId() {
+        return currentGroupId;
+    }
 
-        if (mensaje.startsWith("/")) {
-            enviarMensaje("Sistema: Comando no reconocido o reservado.");
-            return;
-        }
+    public String getCurrentGroupName() {
+        return currentGroupName;
+    }
 
-        Mensaje.procesar(mensaje, this, servidor);
+    public void setCurrentGroup(int groupId, String groupName) {
+        this.currentGroupId = groupId;
+        this.currentGroupName = groupName;
     }
 
     private void inicializarCliente() throws IOException {
         nombreCliente = servidor.generarNombreAnonimo();
         servidor.agregarCliente(nombreCliente, this);
-        Mensaje.notificarATodos(nombreCliente + " se ha unido al chat como invitado.", this, servidor);
+        Mensaje.notificarATodos(nombreCliente + " se ha unido al chat (en " + this.currentGroupName + ").", this, servidor);
     }
 
     private void enviarMensajesDeBienvenida() throws IOException {
-        enviarMensaje("Sistema: Tu nombre actual es " + nombreCliente + ". Tienes un límite de " + LIMITE_MENSAJES_GRATIS + " mensajes antes de autenticarte.");
-        enviarMensaje("Sistema: Usa '/register <nombre_usuario> <PIN>' (Ej: /register Arturo 1234) o '/login <nombre_usuario> <PIN>'.");
-        enviarMensaje("Sistema: Usa '/block <usuario>' y '/unblock <usuario>' para gestionar bloqueos (requiere estar autenticado).");
-        enviarMensaje("Sistema: Juega al Gato con usuarios autenticados. Puedes tener múltiples partidas activas:");
-        enviarMensaje("Sistema: - Proponer juego: /gato <usuario>");
-        enviarMensaje("Sistema: - Responder propuesta: /accept <proponente> o /reject <proponente>");
-        enviarMensaje("Sistema: - Mover: /move <oponente> <fila> <columna> (ej: /move [NombreOponente] 1 3)");
-        enviarMensaje("Sistema: - Revancha: /si <oponente> o /no <oponente> (al finalizar un juego).");
-        enviarMensaje("Sistema: - Ranking: /ranking (Muestra los 10 mejores jugadores)");
-        enviarMensaje("Sistema: - Historial VS: /vs <usuario1> <usuario2> (Muestra estadísticas entre dos jugadores)");
+        enviarMensaje("Sistema: Bienvenido. Actualmente estás en el grupo: " + this.currentGroupName);
+        enviarMensaje("Sistema: Como invitado (" + nombreCliente + "), solo puedes enviar " + LIMITE_MENSAJES_GRATIS + " mensajes en el grupo 'Todos'.");
+        enviarMensaje("Sistema: Usa '/register <nombre_usuario> <PIN>' o '/login <nombre_usuario> <PIN>'.");
+        enviarMensaje("Sistema: Los usuarios autenticados pueden usar:");
+        enviarMensaje("Sistema: - '/glist' (Ver todos los grupos)");
+        enviarMensaje("Sistema: - '/gcreate <nombre_grupo>' (Crear un grupo)");
+        enviarMensaje("Sistema: - '/gdelete <nombre_grupo>' (Borrar un grupo si eres el creador - *funcionalidad simplificada: cualquiera puede borrar*)");
+        enviarMensaje("Sistema: - '/join <nombre_grupo>' (Unirse y cambiar a un grupo)");
+        enviarMensaje("Sistema: - '/block <usuario>' y '/unblock <usuario>'");
+        enviarMensaje("Sistema: Juega al Gato (comandos /gato, /accept, /move, /ranking, /vs, etc.)");
+    }
+
+    private void enviarMensajesPendientes() throws IOException {
+        if (!autenticado) return; // Los anónimos no tienen historial
+
+        List<BDusuarios.MensajeGrupo> mensajes = BDusuarios.obtenerMensajesNoVistos(this.nombreCliente, this.currentGroupId);
+        if (mensajes.isEmpty()) {
+            enviarMensaje("Sistema: No hay mensajes nuevos en '" + this.currentGroupName + "'.");
+            return;
+        }
+
+        enviarMensaje("Sistema: --- Mostrando mensajes no leídos para '" + this.currentGroupName + "' ---");
+        long ultimoId = 0;
+        for (BDusuarios.MensajeGrupo msg : mensajes) {
+            enviarMensaje("[" + msg.timestamp + "] " + msg.sender + ": " + msg.content);
+            ultimoId = msg.messageId;
+        }
+
+        if (ultimoId > 0) {
+            BDusuarios.actualizarUltimoMensajeVisto(this.nombreCliente, this.currentGroupId, ultimoId);
+        }
+        enviarMensaje("Sistema: --- Fin de mensajes no leídos ---");
     }
 
     private void manejarDesconexion() {
@@ -115,7 +140,15 @@ public class UnCliente implements Runnable {
                 System.out.println("Error al notificar desconexión de juego.");
             }
             servidor.removerCliente(nombreCliente);
-            Mensaje.notificarATodos(nombreCliente + " ha abandonado el chat.", null, servidor);
+            String msg = nombreCliente + " ha abandonado el chat.";
+            System.out.println(msg);
+            for (UnCliente cliente : servidor.getTodosLosClientes()) {
+                if (cliente.getCurrentGroupId() == BDusuarios.ID_TODOS) {
+                    try {
+                        cliente.enviarMensaje("Sistema: " + msg);
+                    } catch (IOException e) {}
+                }
+            }
         }
     }
 
@@ -131,14 +164,25 @@ public class UnCliente implements Runnable {
     }
 
     private void procesarMensaje(String mensaje) throws IOException {
-        String comando = mensaje.split(" ", 2)[0];
+        String comando = mensaje.split(" ", 2)[0].toLowerCase();
 
         if (comando.equals("/register") || comando.equals("/login")) {
             autenticador.manejarAutenticacion(mensaje);
         } else if (autenticado) {
             procesarMensajeAutenticado(mensaje, comando);
         } else {
-            controladorInvitado.manejarMensaje(mensaje, servidor);
+            if (getMensajesGratisEnviados() < getLimiteMensajesGratis()) {
+                if (mensaje.startsWith("/") || mensaje.startsWith("@")) {
+                    enviarMensaje("Sistema: Los invitados no pueden usar comandos ni mensajes privados. Registre una cuenta.");
+                } else if (mensaje.trim().isEmpty()) {
+                    enviarMensaje("Sistema: No puedes enviar un mensaje vacío.");
+                } else {
+                    Mensaje.procesar(mensaje, this, servidor);
+                    incrementarMensajesGratisEnviados();
+                }
+            } else {
+                enviarMensaje("Sistema: Has alcanzado el límite de " + getLimiteMensajesGratis() + " mensajes para invitados. Por favor, regístrate o inicia sesión.");
+            }
         }
     }
 
@@ -146,7 +190,20 @@ public class UnCliente implements Runnable {
 
         boolean estaEnInteraccionJuego = controladorJuego.estaJugando(nombreCliente) || controladorJuego.tieneRevanchaPendiente(nombreCliente);
 
-        if (comando.equals("/move") || comando.equals("/gato") || comando.equals("/accept") || comando.equals("/reject") || comando.equals("/si") || comando.equals("/no")) {
+        if (comando.equals("/gcreate")) {
+            manejarCrearGrupo(mensaje);
+        }
+        else if (comando.equals("/gdelete")) {
+            manejarEliminarGrupo(mensaje);
+        }
+        else if (comando.equals("/join")) {
+            manejarUnirseGrupo(mensaje);
+        }
+        else if (comando.equals("/glist")) {
+            manejarListarGrupos();
+        }
+
+        else if (comando.equals("/move") || comando.equals("/gato") || comando.equals("/accept") || comando.equals("/reject") || comando.equals("/si") || comando.equals("/no")) {
             manejadorComandosJuego.manejarComando(mensaje, this);
         }
         else if (comando.equals("/ranking")) {
@@ -157,7 +214,6 @@ public class UnCliente implements Runnable {
             manejarVs(partes);
         }
         else if (estaEnInteraccionJuego) {
-
             if (mensaje.startsWith("@")) {
                 String[] partes = mensaje.split(" ", 2);
                 String nombreDestino = partes[0].substring(1);
@@ -174,7 +230,7 @@ public class UnCliente implements Runnable {
                 enviarMensaje("Sistema: Acción bloqueada. Solo se permiten comandos de juego, ranking (/ranking, /vs) y chat privado (@oponente) mientras estás en partida/revancha.");
             }
             else {
-                enviarMensaje("Sistema: Chat público bloqueado. Usa @<oponente> <mensaje> para hablar con tu oponente.");
+                enviarMensaje("Sistema: Chat público (grupo) bloqueado. Usa @<oponente> <mensaje> para hablar con tu oponente.");
             }
         }
         else if (comando.equals("/block") || comando.equals("/unblock")) {
@@ -184,9 +240,103 @@ public class UnCliente implements Runnable {
             enviarMensaje("Sistema: Comando no reconocido.");
         }
         else {
-            manejarMensajeAutenticado(mensaje);
+            if (mensaje.trim().isEmpty()) {
+                enviarMensaje("Sistema: No puedes enviar un mensaje vacío.");
+                return;
+            }
+            Mensaje.procesar(mensaje, this, servidor);
         }
     }
+
+    private void manejarCrearGrupo(String mensaje) throws IOException {
+        String[] partes = mensaje.split(" ", 2);
+        if (partes.length != 2 || partes[1].trim().isEmpty()) {
+            enviarMensaje("Sistema: Uso incorrecto. /gcreate <nombre_grupo>");
+            return;
+        }
+        String groupName = partes[1].trim();
+        if (groupName.equalsIgnoreCase(BDusuarios.NOMBRE_TODOS)) {
+            enviarMensaje("Sistema: No puedes crear un grupo llamado '" + BDusuarios.NOMBRE_TODOS + "'.");
+            return;
+        }
+
+        if (BDusuarios.crearGrupo(groupName, this.nombreCliente)) {
+            enviarMensaje("Sistema: Grupo '" + groupName + "' creado.");
+            manejarUnirseGrupo("/join " + groupName);
+        } else {
+            enviarMensaje("Sistema: Error al crear el grupo (quizás ya existe).");
+        }
+    }
+
+    private void manejarEliminarGrupo(String mensaje) throws IOException {
+        String[] partes = mensaje.split(" ", 2);
+        if (partes.length != 2 || partes[1].trim().isEmpty()) {
+            enviarMensaje("Sistema: Uso incorrecto. /gdelete <nombre_grupo>");
+            return;
+        }
+        String groupName = partes[1].trim();
+        if (groupName.equalsIgnoreCase(BDusuarios.NOMBRE_TODOS)) {
+            enviarMensaje("Sistema: No puedes eliminar el grupo '" + BDusuarios.NOMBRE_TODOS + "'.");
+            return;
+        }
+
+        if (BDusuarios.eliminarGrupo(groupName)) {
+            enviarMensaje("Sistema: Grupo '" + groupName + "' eliminado.");
+            for (UnCliente cliente : servidor.getTodosLosClientes()) {
+                if (cliente.getCurrentGroupName().equalsIgnoreCase(groupName)) {
+                    cliente.setCurrentGroup(BDusuarios.ID_TODOS, BDusuarios.NOMBRE_TODOS);
+                    cliente.enviarMensaje("Sistema: El grupo '" + groupName + "' fue eliminado. Has sido movido a '" + BDusuarios.NOMBRE_TODOS + "'.");
+                    cliente.enviarMensajesPendientes();
+                }
+            }
+        } else {
+            enviarMensaje("Sistema: Error al eliminar el grupo (quizás no existe).");
+        }
+    }
+
+    private void manejarUnirseGrupo(String mensaje) throws IOException {
+        String[] partes = mensaje.split(" ", 2);
+        if (partes.length != 2 || partes[1].trim().isEmpty()) {
+            enviarMensaje("Sistema: Uso incorrecto. /join <nombre_grupo>");
+            return;
+        }
+        String groupName = partes[1].trim();
+        int groupId = BDusuarios.obtenerGrupoIdPorNombre(groupName);
+
+        if (groupId == -1) {
+            enviarMensaje("Sistema: El grupo '" + groupName + "' no existe.");
+            return;
+        }
+
+        if (this.currentGroupId == groupId) {
+            enviarMensaje("Sistema: Ya estás en el grupo '" + groupName + "'.");
+            return;
+        }
+
+        if (groupId != BDusuarios.ID_TODOS) {
+            BDusuarios.unirUsuarioAGrupo(this.nombreCliente, groupId);
+        }
+
+        this.setCurrentGroup(groupId, groupName);
+        enviarMensaje("Sistema: Te has unido al grupo '" + groupName + "'.");
+
+        enviarMensajesPendientes();
+    }
+
+    private void manejarListarGrupos() throws IOException {
+        List<String> grupos = BDusuarios.obtenerTodosLosGrupos();
+        if (grupos.isEmpty()) {
+            enviarMensaje("Sistema: No hay grupos disponibles.");
+            return;
+        }
+        StringBuilder sb = new StringBuilder("--- GRUPOS DISPONIBLES ---\n");
+        for (String grupo : grupos) {
+            sb.append("- ").append(grupo).append("\n");
+        }
+        sb.append("----------------------------");
+        enviarMensaje(sb.toString());
+    }
+
 
     private void manejarRanking() throws IOException {
         List<RankingEntry> ranking = BDusuarios.obtenerRankingGeneral();
@@ -277,4 +427,11 @@ public class UnCliente implements Runnable {
             manejarDesconexion();
         }
     }
+
+    public void postAutenticacionExitosa() throws IOException {
+        this.setCurrentGroup(BDusuarios.ID_TODOS, BDusuarios.NOMBRE_TODOS);
+        enviarMensaje("Sistema: Has iniciado sesión. Estás en el grupo '" + this.currentGroupName + "'.");
+        enviarMensajesPendientes();
+    }
+
 }
