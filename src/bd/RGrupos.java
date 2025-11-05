@@ -116,7 +116,7 @@ public class RGrupos {
 
     public static List<String> obtenerMiembrosGrupo(int groupId) {
         List<String> miembros = new ArrayList<>();
-        if (groupId == ID_TODOS) return miembros; // "Todos" es virtual
+        if (groupId == ID_TODOS) return miembros;
         String sql = "SELECT username FROM " + TABLE_GROUP_MEMBERS + " WHERE group_id = ?";
         try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, groupId);

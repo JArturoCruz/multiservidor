@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.HashSet;
+import bd.RJuego; // <--- IMPORTACIÓN CORREGIDA (antes era BDusuarios)
 
 public class ControladorJuego {
     private final Map<String, Map<String, JuegoGato>> juegosActivos;
@@ -101,7 +102,8 @@ public class ControladorJuego {
                 String jugador1 = juego.getJugadorX().getNombreCliente();
                 String jugador2 = juego.getJugadorO().getNombreCliente();
 
-                BDusuarios.registrarResultadoPartida(jugador1, jugador2, ganador);
+                // --- LÍNEA CORREGIDA ---
+                RJuego.registrarResultadoPartida(jugador1, jugador2, ganador);
 
                 solicitarRevancha(cliente, juego, nombreOponente);
             }
@@ -269,7 +271,8 @@ public class ControladorJuego {
                     String jugador1 = juego.getJugadorX().getNombreCliente();
                     String jugador2 = juego.getJugadorO().getNombreCliente();
 
-                    BDusuarios.registrarResultadoPartida(jugador1, jugador2, ganador);
+                    // --- LÍNEA CORREGIDA ---
+                    RJuego.registrarResultadoPartida(jugador1, jugador2, ganador);
                 } else {
 
                 }

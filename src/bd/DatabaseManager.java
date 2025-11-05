@@ -13,7 +13,6 @@ public class DatabaseManager {
         return DriverManager.getConnection(DB_URL);
     }
 
-    // Llama a los métodos de inicialización de cada repositorio
     public static void inicializarBaseDeDatos() {
         try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
             RUsuarios.crearTablas(stmt);
