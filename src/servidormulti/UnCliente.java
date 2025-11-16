@@ -26,7 +26,7 @@ public class UnCliente implements Runnable {
     private final ControladorJuego controladorJuego;
     private final FormateadorMensajes formateador;
 
-    private EstadoCliente estadoActual; // Patrón State
+    private EstadoCliente estadoActual;
 
     UnCliente(Socket s, ServidorMulti servidor) throws IOException {
         salida = new DataOutputStream(s.getOutputStream());
@@ -35,8 +35,6 @@ public class UnCliente implements Runnable {
         this.autenticador = new AutenticadorCliente(this, servidor);
         this.controladorJuego = servidor.getControladorJuego();
         this.formateador = new FormateadorMensajes();
-
-        // Inicia en estado Invitado
         this.estadoActual = new EstadoInvitado(this);
         this.currentGroupId = RGrupos.ID_TODOS;
         this.currentGroupName = RGrupos.NOMBRE_TODOS;
@@ -80,11 +78,9 @@ public class UnCliente implements Runnable {
     private void procesarMensaje(String mensaje) throws IOException {
         String comando = mensaje.split(" ", 2)[0].toLowerCase();
 
-        // La autenticación es un caso especial que cambia el estado
         if (comando.equals("/register") || comando.equals("/login")) {
             autenticador.manejarAutenticacion(mensaje);
         } else {
-            // Delega toda la lógica al objeto de estado actual
             estadoActual.procesarMensaje(mensaje);
         }
     }
@@ -124,13 +120,33 @@ public class UnCliente implements Runnable {
         enviarMensaje("Sistema: --- Fin de mensajes no leídos ---");
     }
 
-    // Llamado por AutenticadorCliente al tener éxito
     public void setEstadoAutenticado() {
         this.estadoActual = new EstadoAutenticado(this, servidor);
         resetMensajesGratisEnviados();
     }
 
-    // --- Getters y Setters públicos para los objetos de Estado y Manejadores ---
+    public void setEstadoInvitado() throws IOException {
+        String nombreAnterior = this.nombreCliente;
+
+        controladorJuego.finalizarPorDesconexion(this);
+        String msg = nombreAnterior + " ha cerrado sesión.";
+        System.out.println(msg);
+        Mensaje.notificarATodos(msg, null, servidor); // Notifica a otros clientes
+
+        servidor.removerCliente(nombreAnterior);
+
+        this.nombreCliente = servidor.generarNombreAnonimo();
+        servidor.agregarCliente(nombreCliente, this);
+
+        this.estadoActual = new EstadoInvitado(this);
+        this.currentGroupId = RGrupos.ID_TODOS;
+        this.currentGroupName = RGrupos.NOMBRE_TODOS;
+        resetMensajesGratisEnviados();
+
+        enviarMensaje("Sistema: Sesión cerrada con éxito. Ahora eres un invitado con el nombre " + this.nombreCliente + ".");
+        enviarMensajesDeBienvenida();
+    }
+
     public void enviarMensaje(String mensaje) throws IOException { this.salida.writeUTF(mensaje); }
     public String getNombreCliente() { return nombreCliente; }
     public void setNombreCliente(String n) { this.nombreCliente = n; }

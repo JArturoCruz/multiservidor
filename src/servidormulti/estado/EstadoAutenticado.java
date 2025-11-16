@@ -29,6 +29,11 @@ public class EstadoAutenticado implements EstadoCliente {
     public void procesarMensaje(String mensaje) throws IOException {
         String comando = mensaje.split(" ", 2)[0].toLowerCase();
 
+        if (comando.equals("/logout")) {
+            cliente.setEstadoInvitado();
+            return;
+        }
+
         if (estaEnInteraccionJuego()) {
             manejarMensajeEnJuego(mensaje, comando);
             return;
