@@ -32,15 +32,15 @@ public class ClienteMulti {
                 hiloParaRecibir.join();
                 hiloParaMandar.join();
 
-                System.err.println("\n*** CONEXIÓN PERDIDA. REINTENTANDO... ***");
+                System.err.println("\n--- El hilo de comunicación ha finalizado. Iniciando ciclo de RECONEXIÓN automática ---");
                 conectado = false;
 
             } catch (ConnectException e) {
-                System.err.println("Error de conexión inicial: Servidor no disponible.");
+                System.err.println("❌ Error de conexión inicial: Servidor no disponible.");
                 esperarParaReintento();
 
             } catch (IOException e) {
-                System.err.println("Error de comunicación. Asegúrese de que el servidor está en funcionamiento.");
+                System.err.println("❌ Error de comunicación. Asegúrese de que el servidor está en funcionamiento.");
                 esperarParaReintento();
 
             } catch (InterruptedException e) {
