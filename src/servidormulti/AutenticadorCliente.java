@@ -55,10 +55,17 @@ public class AutenticadorCliente {
     }
 
     private boolean validarNombre(String nuevoNombre, String oldNombreCliente) throws IOException {
+
+        if (nuevoNombre.startsWith("/")) {
+            cliente.enviarMensaje("Sistema: El nombre de usuario no puede empezar con '/'.");
+            return false;
+        }
+
         if (nuevoNombre.toLowerCase().startsWith("anonimo") && !nuevoNombre.equals(oldNombreCliente)) {
             cliente.enviarMensaje("Sistema: El nombre de usuario '" + nuevoNombre + "' está reservado.");
             return false;
         }
+
         return true;
     }
 
@@ -93,7 +100,6 @@ public class AutenticadorCliente {
 
         Mensaje.notificarATodos(notificacion, cliente, servidor);
 
-        // Cargar mensajes pendientes del grupo "Todos"
         cliente.setCurrentGroup(RGrupos.ID_TODOS, RGrupos.NOMBRE_TODOS);
         cliente.enviarMensaje("Sistema: Has iniciado sesión. Estás en el grupo '" + cliente.getCurrentGroupName() + "'.");
         cliente.enviarMensajesPendientes();
