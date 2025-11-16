@@ -1,3 +1,0 @@
-yaz,1234
-arturo,1234
-arturo2,1234
