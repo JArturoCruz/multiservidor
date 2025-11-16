@@ -5,7 +5,7 @@ import java.net.Socket;
 
 public class ClienteMulti {
 
-    public static void main(String[] args) { // Se cambia throws IOException a try-catch
+    public static void main(String[] args) {
         try {
             Socket s = new Socket("localhost", 8080);
             mostrarInstrucciones();
@@ -29,6 +29,7 @@ public class ClienteMulti {
         System.out.println("\n--- COMANDOS BÁSICOS ---");
         System.out.println("Registrar: /register <nombre_usuario> <PIN de 4 dígitos>");
         System.out.println("Iniciar Sesión: /login <nombre_usuario> <PIN de 4 dígitos>");
+        System.out.println("Cerrar Sesión: /logout"); // Nuevo
 
         System.out.println("\n--- COMANDOS (AUTENTICADOS) ---");
         System.out.println("Mensaje Privado: @usuario <mensaje>");
