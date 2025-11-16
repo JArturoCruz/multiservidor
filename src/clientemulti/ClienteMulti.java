@@ -5,17 +5,22 @@ import java.net.Socket;
 
 public class ClienteMulti {
 
-    public static void main(String[] args) throws IOException {
-        Socket s = new Socket("localhost", 8080);
-        mostrarInstrucciones();
+    public static void main(String[] args) { // Se cambia throws IOException a try-catch
+        try {
+            Socket s = new Socket("localhost", 8080);
+            mostrarInstrucciones();
 
-        Mandar paraMandar = new Mandar(s);
-        Thread hiloParaMandar = new Thread(paraMandar);
-        hiloParaMandar.start();
+            Mandar paraMandar = new Mandar(s);
+            Thread hiloParaMandar = new Thread(paraMandar);
+            hiloParaMandar.start();
 
-        Recibir paraRecibir = new Recibir(s);
-        Thread hiloParaRecibir = new Thread(paraRecibir);
-        hiloParaRecibir.start();
+            Recibir paraRecibir = new Recibir(s);
+            Thread hiloParaRecibir = new Thread(paraRecibir);
+            hiloParaRecibir.start();
+        } catch (IOException e) {
+            System.err.println("\n*** ERROR CRÍTICO: No se pudo conectar con el servidor (localhost:8080). ***");
+            System.err.println("Asegúrese de que el servidor esté en funcionamiento y accesible.");
+        }
     }
 
     private static void mostrarInstrucciones() {
