@@ -34,6 +34,11 @@ public class EstadoAutenticado implements EstadoCliente {
             return;
         }
 
+        if (comando.equals("/logout")) {
+            cliente.setEstadoInvitado();
+            return;
+        }
+
         if (estaEnInteraccionJuego()) {
             manejarMensajeEnJuego(mensaje, comando);
             return;

@@ -2,24 +2,61 @@ package clientemulti;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.net.ConnectException;
 
 public class ClienteMulti {
 
+    private static final int TIEMPO_ESPERA_MS = 5000;
+
     public static void main(String[] args) {
+
+        boolean conectado = false;
+
+        while (!conectado) {
+            try {
+                System.out.println("Intentando conectar con el servidor (localhost:8080)...");
+                Socket s = new Socket("localhost", 8080);
+                conectado = true;
+                System.out.println("¡Conexión exitosa!");
+
+                mostrarInstrucciones();
+
+                Mandar paraMandar = new Mandar(s);
+                Thread hiloParaMandar = new Thread(paraMandar);
+                hiloParaMandar.start();
+
+                Recibir paraRecibir = new Recibir(s);
+                Thread hiloParaRecibir = new Thread(paraRecibir);
+                hiloParaRecibir.start();
+
+                hiloParaRecibir.join();
+                hiloParaMandar.join();
+
+                System.err.println("\n*** CONEXIÓN PERDIDA. REINTENTANDO... ***");
+                conectado = false;
+
+            } catch (ConnectException e) {
+                System.err.println("Error de conexión inicial: Servidor no disponible.");
+                esperarParaReintento();
+
+            } catch (IOException e) {
+                System.err.println("Error de comunicación. Asegúrese de que el servidor está en funcionamiento.");
+                esperarParaReintento();
+
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.err.println("Programa interrumpido.");
+                conectado = true;
+            }
+        }
+    }
+
+    private static void esperarParaReintento() {
+        System.out.println("Esperando " + (TIEMPO_ESPERA_MS / 1000) + " segundos para reintentar...");
         try {
-            Socket s = new Socket("localhost", 8080);
-            mostrarInstrucciones();
-
-            Mandar paraMandar = new Mandar(s);
-            Thread hiloParaMandar = new Thread(paraMandar);
-            hiloParaMandar.start();
-
-            Recibir paraRecibir = new Recibir(s);
-            Thread hiloParaRecibir = new Thread(paraRecibir);
-            hiloParaRecibir.start();
-        } catch (IOException e) {
-            System.err.println("\n*** ERROR CRÍTICO: No se pudo conectar con el servidor (localhost:8080). ***");
-            System.err.println("Asegúrese de que el servidor esté en funcionamiento y accesible.");
+            Thread.sleep(TIEMPO_ESPERA_MS);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
         }
     }
 
