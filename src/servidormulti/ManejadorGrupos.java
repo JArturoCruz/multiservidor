@@ -2,6 +2,7 @@ package servidormulti;
 
 import bd.RGrupos;
 import java.io.IOException;
+import java.util.List;
 
 public class ManejadorGrupos {
 
@@ -29,8 +30,9 @@ public class ManejadorGrupos {
             cliente.enviarMensaje("Sistema: No puedes crear el grupo '" + RGrupos.NOMBRE_TODOS + "'.");
             return;
         }
+        // Se pasa el nombre del cliente como administrador
         if (RGrupos.crearGrupo(groupName, cliente.getNombreCliente())) {
-            cliente.enviarMensaje("Sistema: Grupo '" + groupName + "' creado.");
+            cliente.enviarMensaje("Sistema: Grupo '" + groupName + "' creado con éxito. Eres el administrador.");
             manejarUnirseGrupo("/join " + groupName); // Unirse automáticamente
         } else {
             cliente.enviarMensaje("Sistema: Error al crear el grupo (quizás ya existe).");
@@ -40,15 +42,25 @@ public class ManejadorGrupos {
     private void manejarEliminarGrupo(String mensaje) throws IOException {
         String groupName = parsearArgumentoUnico(mensaje, "/gdelete");
         if (groupName == null) return;
+
         if (groupName.equalsIgnoreCase(RGrupos.NOMBRE_TODOS)) {
             cliente.enviarMensaje("Sistema: No puedes eliminar el grupo '" + RGrupos.NOMBRE_TODOS + "'.");
             return;
         }
+
+        // --- VALIDACIÓN DE ADMINISTRADOR ---
+        if (!RGrupos.esAdministradorGrupo(groupName, cliente.getNombreCliente())) {
+            String admin = RGrupos.obtenerAdminGrupo(groupName);
+            cliente.enviarMensaje("Sistema: Solo el administrador (" + admin + ") puede eliminar el grupo '" + groupName + "'.");
+            return;
+        }
+        // -----------------------------------
+
         if (RGrupos.eliminarGrupo(groupName)) {
-            cliente.enviarMensaje("Sistema: Grupo '" + groupName + "' eliminado.");
+            cliente.enviarMensaje("Sistema: Grupo '" + groupName + "' eliminado con éxito.");
             notificarMiembrosGrupoEliminado(groupName);
         } else {
-            cliente.enviarMensaje("Sistema: Error al eliminar el grupo (quizás no existe).");
+            cliente.enviarMensaje("Sistema: Error al eliminar grupo '" + groupName + "'. El grupo podría no existir.");
         }
     }
 
@@ -56,7 +68,8 @@ public class ManejadorGrupos {
         for (UnCliente c : servidor.getTodosLosClientes()) {
             if (c.getCurrentGroupName().equalsIgnoreCase(groupName)) {
                 c.setCurrentGroup(RGrupos.ID_TODOS, RGrupos.NOMBRE_TODOS);
-                c.enviarMensaje("Sistema: El grupo '" + groupName + "' fue eliminado. Has sido movido a '" + RGrupos.NOMBRE_TODOS + "'.");
+                c.enviarMensaje("Sistema: El grupo '" + groupName + "' fue eliminado por el administrador.");
+                c.enviarMensaje("Sistema: Has sido movido automáticamente al grupo '" + RGrupos.NOMBRE_TODOS + "'.");
                 c.enviarMensajesPendientes();
             }
         }
@@ -66,6 +79,7 @@ public class ManejadorGrupos {
         String groupName = parsearArgumentoUnico(mensaje, "/join");
         if (groupName == null) return;
         int groupId = RGrupos.obtenerGrupoIdPorNombre(groupName);
+
         if (groupId == -1) {
             cliente.enviarMensaje("Sistema: El grupo '" + groupName + "' no existe.");
             return;
@@ -74,17 +88,25 @@ public class ManejadorGrupos {
             cliente.enviarMensaje("Sistema: Ya estás en el grupo '" + groupName + "'.");
             return;
         }
+
         if (groupId != RGrupos.ID_TODOS) {
             RGrupos.unirUsuarioAGrupo(cliente.getNombreCliente(), groupId);
         }
+
         cliente.setCurrentGroup(groupId, groupName);
-        cliente.enviarMensaje("Sistema: Te has unido al grupo '" + groupName + "'.");
+        cliente.enviarMensaje("Sistema: Te has unido y cambiado al grupo '" + groupName + "'.");
         cliente.enviarMensajesPendientes();
     }
 
     private void manejarListarGrupos() throws IOException {
-        String respuesta = formateador.formatearListaGrupos(RGrupos.obtenerTodosLosGrupos());
-        cliente.enviarMensaje(respuesta);
+        List<String> grupos = RGrupos.obtenerTodosLosGrupos();
+        cliente.enviarMensaje("Sistema: --- Grupos Disponibles ---");
+        for (String g : grupos) {
+            String admin = RGrupos.obtenerAdminGrupo(g);
+            String infoAdmin = (admin != null && !admin.equals("SYSTEM")) ? " (Admin: " + admin + ")" : "";
+            cliente.enviarMensaje(" - " + g + infoAdmin);
+        }
+        cliente.enviarMensaje("Sistema: ---------------------------");
     }
 
     private String parsearArgumentoUnico(String mensaje, String comando) throws IOException {

@@ -21,7 +21,7 @@ public class RGrupos {
     }
 
     public static void crearTablas(Statement stmt) throws SQLException {
-        stmt.execute("CREATE TABLE IF NOT EXISTS " + TABLE_GROUPS + " (group_id INTEGER PRIMARY KEY AUTOINCREMENT, group_name TEXT UNIQUE NOT NULL);");
+        stmt.execute("CREATE TABLE IF NOT EXISTS " + TABLE_GROUPS + " (group_id INTEGER PRIMARY KEY AUTOINCREMENT, group_name TEXT UNIQUE NOT NULL, admin_username TEXT NOT NULL DEFAULT 'SYSTEM');");
         stmt.execute("CREATE TABLE IF NOT EXISTS " + TABLE_GROUP_MEMBERS + " ("
                 + "group_id INTEGER NOT NULL, username TEXT NOT NULL, PRIMARY KEY (group_id, username),"
                 + "FOREIGN KEY (group_id) REFERENCES " + TABLE_GROUPS + "(group_id) ON DELETE CASCADE,"
@@ -36,7 +36,8 @@ public class RGrupos {
                 + "PRIMARY KEY (username, group_id),"
                 + "FOREIGN KEY (username) REFERENCES USERS(username),"
                 + "FOREIGN KEY (group_id) REFERENCES " + TABLE_GROUPS + "(group_id) ON DELETE CASCADE);");
-        stmt.execute("INSERT OR IGNORE INTO " + TABLE_GROUPS + " (group_id, group_name) VALUES (" + ID_TODOS + ", '" + NOMBRE_TODOS + "')");
+
+        stmt.execute("INSERT OR IGNORE INTO " + TABLE_GROUPS + " (group_id, group_name, admin_username) VALUES (" + ID_TODOS + ", '" + NOMBRE_TODOS + "', 'SYSTEM')");
     }
 
     public static int obtenerGrupoIdPorNombre(String groupName) {
@@ -54,12 +55,13 @@ public class RGrupos {
 
     public static boolean crearGrupo(String groupName, String creator) {
         if (obtenerGrupoIdPorNombre(groupName) != -1) return false;
-        String sqlGrupo = "INSERT INTO " + TABLE_GROUPS + " (group_name) VALUES (?)";
+
+        String sqlGrupo = "INSERT INTO " + TABLE_GROUPS + " (group_name, admin_username) VALUES (?, ?)";
         String sqlMiembro = "INSERT INTO " + TABLE_GROUP_MEMBERS + " (group_id, username) VALUES (?, ?)";
 
         try (Connection conn = DatabaseManager.getConnection()) {
             conn.setAutoCommit(false);
-            int groupId = ejecutarInsertGrupo(conn, sqlGrupo, groupName);
+            int groupId = ejecutarInsertGrupo(conn, sqlGrupo, groupName, creator);
             ejecutarInsertMiembro(conn, sqlMiembro, groupId, creator);
             conn.commit();
             return true;
@@ -69,15 +71,35 @@ public class RGrupos {
         }
     }
 
-    private static int ejecutarInsertGrupo(Connection conn, String sql, String name) throws SQLException {
+    private static int ejecutarInsertGrupo(Connection conn, String sql, String name, String admin) throws SQLException {
         try (PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             pstmt.setString(1, name);
+            pstmt.setString(2, admin);
             pstmt.executeUpdate();
             try (ResultSet rs = pstmt.getGeneratedKeys()) {
                 if (rs.next()) return rs.getInt(1);
                 throw new SQLException("Fallo al crear grupo, no se obtuvo ID.");
             }
         }
+    }
+
+    public static String obtenerAdminGrupo(String groupName) {
+        String sql = "SELECT admin_username FROM " + TABLE_GROUPS + " WHERE group_name = ?";
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, groupName);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                return rs.next() ? rs.getString("admin_username") : null;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al obtener administrador de grupo: " + e.getMessage());
+            return null;
+        }
+    }
+
+    public static boolean esAdministradorGrupo(String groupName, String username) {
+        String admin = obtenerAdminGrupo(groupName);
+        if (groupName.equalsIgnoreCase(NOMBRE_TODOS)) return false;
+        return admin != null && admin.equals(username);
     }
 
     private static void ejecutarInsertMiembro(Connection conn, String sql, int gId, String user) throws SQLException {
