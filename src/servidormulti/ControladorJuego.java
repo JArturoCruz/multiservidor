@@ -73,8 +73,6 @@ public class ControladorJuego {
         juegosActivos.computeIfAbsent(nombreProp, k -> Collections.synchronizedMap(new HashMap<>())).put(nombreAcep, juego);
         juegosActivos.computeIfAbsent(nombreAcep, k -> Collections.synchronizedMap(new HashMap<>())).put(nombreProp, juego);
 
-        proponente.enviarMensaje("Sistema Gato: ¡Juego iniciado con " + nombreAcep + "! Empiezas tú. Usa /move " + nombreAcep + " <fila> <columna>.");
-        aceptante.enviarMensaje("Sistema Gato: ¡Juego iniciado con " + nombreProp + "! Espera el movimiento de " + nombreProp + ".");
     }
 
     public void manejarMovimiento(UnCliente cliente, String nombreOponente, String sFila, String sColumna) throws IOException {
