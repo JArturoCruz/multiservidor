@@ -55,17 +55,10 @@ public class AutenticadorCliente {
     }
 
     private boolean validarNombre(String nuevoNombre, String oldNombreCliente) throws IOException {
-
-        if (nuevoNombre.startsWith("/")) {
-            cliente.enviarMensaje("Sistema: El nombre de usuario no puede empezar con '/'.");
-            return false;
-        }
-
         if (nuevoNombre.toLowerCase().startsWith("anonimo") && !nuevoNombre.equals(oldNombreCliente)) {
             cliente.enviarMensaje("Sistema: El nombre de usuario '" + nuevoNombre + "' está reservado.");
             return false;
         }
-
         return true;
     }
 
@@ -84,6 +77,11 @@ public class AutenticadorCliente {
         if (!RUsuarios.UsuarioExistente(nuevoNombre)) {
             cliente.enviarMensaje("Sistema: Error al iniciar sesión. Usuario '" + nuevoNombre + "' no registrado. Usa /register.");
         } else if (RUsuarios.AutenticarUsuario(nuevoNombre, pin)) {
+            if (servidor.clienteEstaConectado(nuevoNombre)) {
+                cliente.enviarMensaje("Sistema: Error al iniciar sesión. El usuario '" + nuevoNombre + "' ya tiene una sesión activa.");
+                return;
+            }
+
             autenticacionExitosa(nuevoNombre, oldNombreCliente, nuevoNombre + " ha iniciado sesion");
             cliente.enviarMensaje("Sistema:Inicio de sesión exitoso, tu nombre ahora es '" + nuevoNombre + "'.");
         } else {
