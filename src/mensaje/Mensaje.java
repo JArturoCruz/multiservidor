@@ -35,6 +35,20 @@ public class Mensaje {
         }
     }
 
+    public static void notificarAlGrupo(String notificacion, UnCliente clienteExcluido, ServidorMulti servidor) {
+        if (clienteExcluido == null) return;
+        int grupoId = clienteExcluido.getCurrentGroupId();
+        if (grupoId == bd.RGrupos.ID_TODOS) return;
+
+        System.out.println(notificacion + " (Grupo: " + clienteExcluido.getCurrentGroupName() + ")");
+
+        for (UnCliente cliente : servidor.getTodosLosClientes()) {
+            if (cliente != clienteExcluido && cliente.getCurrentGroupId() == grupoId) {
+                intentarEnviarNotificacion(cliente, notificacion);
+            }
+        }
+    }
+
     private static void intentarEnviarNotificacion(UnCliente cliente, String notificacion) {
         try {
             cliente.enviarMensaje("Sistema: " + notificacion);

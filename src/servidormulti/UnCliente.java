@@ -31,10 +31,12 @@ public class UnCliente implements Runnable {
     UnCliente(Socket s, ServidorMulti servidor) throws IOException {
         salida = new DataOutputStream(s.getOutputStream());
         entrada = new DataInputStream(s.getInputStream());
+
         this.servidor = servidor;
         this.autenticador = new AutenticadorCliente(this, servidor);
         this.controladorJuego = servidor.getControladorJuego();
         this.formateador = new FormateadorMensajes();
+
         this.estadoActual = new EstadoInvitado(this);
         this.currentGroupId = RGrupos.ID_TODOS;
         this.currentGroupName = RGrupos.NOMBRE_TODOS;
@@ -87,15 +89,25 @@ public class UnCliente implements Runnable {
 
     private void manejarDesconexion() {
         if (nombreCliente == null) return;
+
+        String nombreDesconectado = this.nombreCliente;
+        String grupoDesconectado = this.currentGroupName;
+
         try {
             controladorJuego.finalizarPorDesconexion(this);
         } catch (IOException e) {
             System.out.println("Error al notificar desconexión de juego.");
         }
-        servidor.removerCliente(nombreCliente);
-        String msg = nombreCliente + " ha abandonado el chat.";
-        System.out.println(msg);
-        Mensaje.notificarATodos(msg, null, servidor);
+
+        servidor.removerCliente(nombreDesconectado);
+        String msg = nombreDesconectado + " ha abandonado el chat.";
+        if (this.currentGroupId != RGrupos.ID_TODOS) {
+            Mensaje.notificarAlGrupo(msg, this, servidor);
+        } else {
+            Mensaje.notificarATodos(msg, null, servidor);
+        }
+
+        System.out.println("Cliente removido: " + nombreDesconectado + " del grupo " + grupoDesconectado);
     }
 
     public void enviarMensajesPendientes() throws IOException {
@@ -127,11 +139,16 @@ public class UnCliente implements Runnable {
 
     public void setEstadoInvitado() throws IOException {
         String nombreAnterior = this.nombreCliente;
+        int idGrupoAnterior = this.currentGroupId;
 
         controladorJuego.finalizarPorDesconexion(this);
         String msg = nombreAnterior + " ha cerrado sesión.";
-        System.out.println(msg);
-        Mensaje.notificarATodos(msg, null, servidor); // Notifica a otros clientes
+
+        if (idGrupoAnterior != RGrupos.ID_TODOS) {
+            Mensaje.notificarAlGrupo(msg, this, servidor);
+        } else {
+            Mensaje.notificarATodos(msg, null, servidor);
+        }
 
         servidor.removerCliente(nombreAnterior);
 
