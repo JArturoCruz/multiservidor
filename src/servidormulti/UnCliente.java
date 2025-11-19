@@ -8,8 +8,8 @@ import servidormulti.estado.EstadoCliente;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
-import java.util.HashMap;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 
 public class UnCliente implements Runnable {
@@ -28,7 +28,7 @@ public class UnCliente implements Runnable {
     private final ControladorJuego controladorJuego;
     private final FormateadorMensajes formateador;
 
-    private EstadoCliente estadoActual;
+    private EstadoCliente estadoActual; // Patrón State
 
     UnCliente(Socket s, ServidorMulti servidor) throws IOException {
         salida = new DataOutputStream(s.getOutputStream());
@@ -38,6 +38,7 @@ public class UnCliente implements Runnable {
         this.controladorJuego = servidor.getControladorJuego();
         this.formateador = new FormateadorMensajes();
 
+        // Inicia en estado Invitado
         this.estadoActual = new EstadoInvitado(this);
         this.currentGroupId = RGrupos.ID_TODOS;
         this.currentGroupName = RGrupos.NOMBRE_TODOS;
@@ -81,9 +82,11 @@ public class UnCliente implements Runnable {
     private void procesarMensaje(String mensaje) throws IOException {
         String comando = mensaje.split(" ", 2)[0].toLowerCase();
 
+        // La autenticación es un caso especial que cambia el estado
         if (comando.equals("/register") || comando.equals("/login")) {
             autenticador.manejarAutenticacion(mensaje);
         } else {
+            // Delega toda la lógica al objeto de estado actual
             estadoActual.procesarMensaje(mensaje);
         }
     }
@@ -115,35 +118,35 @@ public class UnCliente implements Runnable {
     public void enviarMensajesPendientes() throws IOException {
         if (!isAutenticado()) return;
 
-        List<RGrupos.MensajeGrupo> mensajes = RGrupos.obtenerMensajesNoVistos(this.nombreCliente);
+        // Mantengo el método antiguo aquí, pero asumo que debería usar la versión de un solo argumento para multi-grupo:
+        // List<RGrupos.MensajeGrupo> mensajes = RGrupos.obtenerMensajesNoVistos(this.nombreCliente);
+        List<RGrupos.MensajeGrupo> mensajes = RGrupos.obtenerMensajesNoVistos(this.nombreCliente, this.currentGroupId);
 
         if (mensajes.isEmpty()) {
-            enviarMensaje("Sistema: No hay mensajes nuevos en ninguno de tus grupos.");
+            enviarMensaje("Sistema: No hay mensajes nuevos en '" + this.currentGroupName + "'.");
             return;
         }
 
-        enviarMensaje("Sistema: --- Mostrando mensajes no leídos ---");
-
-        Map<Integer, Long> lastSeenByGroup = new HashMap<>();
-
+        enviarMensaje("Sistema: --- Mostrando mensajes no leídos para '" + this.currentGroupName + "' ---");
+        long ultimoId = 0;
         for (RGrupos.MensajeGrupo msg : mensajes) {
-            enviarMensaje("[" + msg.groupName + "] [" + msg.timestamp + "] " + msg.sender + ": " + msg.content);
-
-            lastSeenByGroup.put(msg.groupId, msg.messageId);
+            enviarMensaje("[" + msg.timestamp + "] " + msg.sender + ": " + msg.content);
+            ultimoId = msg.messageId;
         }
 
-        for (Map.Entry<Integer, Long> entry : lastSeenByGroup.entrySet()) {
-            RGrupos.actualizarUltimoMensajeVisto(this.nombreCliente, entry.getKey(), entry.getValue());
+        if (ultimoId > 0) {
+            RGrupos.actualizarUltimoMensajeVisto(this.nombreCliente, this.currentGroupId, ultimoId);
         }
-
         enviarMensaje("Sistema: --- Fin de mensajes no leídos ---");
     }
 
+    // Llamado por AutenticadorCliente al tener éxito
     public void setEstadoAutenticado() {
         this.estadoActual = new EstadoAutenticado(this, servidor);
         resetMensajesGratisEnviados();
     }
 
+    // Implementación de /logout
     public void setEstadoInvitado() throws IOException {
         String nombreAnterior = this.nombreCliente;
         int idGrupoAnterior = this.currentGroupId;

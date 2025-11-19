@@ -58,7 +58,6 @@ public class EstadoAutenticado implements EstadoCliente {
 
     private void manejarMensajeEnJuego(String mensaje, String comando) throws IOException {
         if (esComandoJuego(comando)) {
-            // CORREGIDO: Se debe pasar el objeto cliente (UnCliente)
             manejadorJuego.manejarComando(mensaje, cliente);
         } else if (esComandoEstadisticas(comando)) {
             manejadorEstadisticas.manejar(mensaje, comando);
@@ -111,6 +110,6 @@ public class EstadoAutenticado implements EstadoCliente {
     }
     private boolean esComandoJuego(String c) { return c.equals("/move") || c.equals("/gato") || c.equals("/accept") || c.equals("/reject") || c.equals("/si") || c.equals("/no"); }
     private boolean esComandoEstadisticas(String c) { return c.equals("/ranking") || c.equals("/vs"); }
-    private boolean esComandoGrupo(String c) { return c.equals("/gcreate") || c.equals("/gdelete") || c.equals("/join") || c.equals("/glist") || c.equals("/ginvite"); }
+    private boolean esComandoGrupo(String c) { return c.equals("/gcreate") || c.equals("/gdelete") || c.equals("/join") || c.equals("/glist") || c.equals("/gleave") || c.equals("/ginvite"); }
     private boolean esComandoBloqueo(String c) { return c.equals("/block") || c.equals("/unblock"); }
 }

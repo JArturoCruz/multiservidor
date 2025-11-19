@@ -26,6 +26,7 @@ public class RGrupos {
     }
 
     public static void crearTablas(Statement stmt) throws SQLException {
+        // Se añade admin_username a la tabla GROUPS
         stmt.execute("CREATE TABLE IF NOT EXISTS " + TABLE_GROUPS + " (group_id INTEGER PRIMARY KEY AUTOINCREMENT, group_name TEXT UNIQUE NOT NULL, admin_username TEXT NOT NULL DEFAULT 'SYSTEM');");
         stmt.execute("CREATE TABLE IF NOT EXISTS " + TABLE_GROUP_MEMBERS + " ("
                 + "group_id INTEGER NOT NULL, username TEXT NOT NULL, PRIMARY KEY (group_id, username),"
@@ -94,6 +95,7 @@ public class RGrupos {
         }
     }
 
+    // Obtiene mensajes no vistos para TODOS los grupos del usuario
     public static List<MensajeGrupo> obtenerMensajesNoVistos(String username) {
         List<Integer> groupIds = obtenerTodosLosGruposDeUsuario(username);
         List<MensajeGrupo> mensajes = new ArrayList<>();
@@ -200,6 +202,22 @@ public class RGrupos {
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             System.err.println("Error al eliminar grupo: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // Método: Remueve a un usuario de un grupo
+    public static boolean removerUsuarioDeGrupo(String username, int groupId) {
+        if (groupId == ID_TODOS) return false;
+
+        String sql = "DELETE FROM " + TABLE_GROUP_MEMBERS + " WHERE group_id = ? AND username = ?";
+
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, groupId);
+            pstmt.setString(2, username);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            System.err.println("Error al remover usuario del grupo: " + e.getMessage());
             return false;
         }
     }
