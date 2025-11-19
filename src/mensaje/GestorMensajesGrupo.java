@@ -1,59 +1,48 @@
 package mensaje;
 
 import bd.RGrupos;
+import bd.RUsuarios;
 import servidormulti.ServidorMulti;
 import servidormulti.UnCliente;
 import java.io.IOException;
-import java.util.Collection;
-import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 public class GestorMensajesGrupo {
 
-    public boolean difundirMensajeGrupo(String msg, UnCliente r, ServidorMulti s) throws IOException {
-        long newMsgId = RGrupos.guardarMensajeGrupo(r.getCurrentGroupId(), r.getNombreCliente(), msg);
-        if (newMsgId == -1) {
-            r.enviarMensaje("Sistema: Error interno al guardar el mensaje.");
+    public boolean difundirMensajeGrupo(String mensaje, UnCliente remitente, ServidorMulti servidor) throws IOException {
+        String remitenteNombre = remitente.getNombreCliente();
+        int groupId = remitente.getCurrentGroupId();
+        String groupName = remitente.getCurrentGroupName();
+
+        long messageId = RGrupos.guardarMensajeGrupo(groupId, remitenteNombre, mensaje);
+        if (messageId == -1) {
+            remitente.enviarMensaje("Sistema: Error al guardar mensaje en la BD.");
             return false;
         }
 
-        RGrupos.actualizarUltimoMensajeVisto(r.getNombreCliente(), r.getCurrentGroupId(), newMsgId);
-        r.enviarMensaje("(Mensaje enviado a " + r.getCurrentGroupName() + ")");
+        String formattedMsg = "[" + groupName + "] " + remitenteNombre + ": " + mensaje;
 
-        String msgFmt = "[" + r.getCurrentGroupName() + "] " + r.getNombreCliente() + ": " + msg;
-        Collection<UnCliente> destinatarios = obtenerDestinatariosOnline(r.getCurrentGroupId(), s);
+        for (UnCliente cliente : servidor.getTodosLosClientes()) {
+            String destinoNombre = cliente.getNombreCliente();
 
-        enviarADestinatariosDeGrupo(destinatarios, r, msgFmt, newMsgId);
-        return true;
-    }
+            if (!cliente.isAutenticado() && groupId != RGrupos.ID_TODOS) {
+                continue;
+            }
 
-    private Collection<UnCliente> obtenerDestinatariosOnline(int gId, ServidorMulti s) {
-        if (gId == RGrupos.ID_TODOS) {
-            return s.getTodosLosClientes();
-        } else {
-            List<String> miembros = RGrupos.obtenerMiembrosGrupo(gId);
-            return miembros.stream()
-                    .map(s::getCliente)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toList());
-        }
-    }
+            if (RUsuarios.estaBloqueado(remitenteNombre, destinoNombre) || RUsuarios.estaBloqueado(destinoNombre, remitenteNombre)) {
+                continue;
+            }
 
-    private void enviarADestinatariosDeGrupo(Collection<UnCliente> dest, UnCliente r, String msgFmt, long newMsgId) {
-        for (UnCliente d : dest) {
-            if (d == r || d.getCurrentGroupId() != r.getCurrentGroupId()) continue;
-
-            boolean bloqueado = bd.RUsuarios.estaBloqueado(d.getNombreCliente(), r.getNombreCliente()) ||
-                    bd.RUsuarios.estaBloqueado(r.getNombreCliente(), d.getNombreCliente());
-
-            if (!bloqueado) {
+            if (RGrupos.esMiembroDeGrupo(destinoNombre, groupId)) {
                 try {
-                    d.enviarMensaje(msgFmt);
-                    RGrupos.actualizarUltimoMensajeVisto(d.getNombreCliente(), d.getCurrentGroupId(), newMsgId);
+                    cliente.enviarMensaje(formattedMsg);
                 } catch (IOException e) {
                 }
             }
         }
+
+        remitente.enviarMensaje("(Mensaje enviado a " + groupName + ")");
+        RGrupos.actualizarUltimoMensajeVisto(remitenteNombre, groupId, messageId);
+
+        return true;
     }
 }

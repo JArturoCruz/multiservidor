@@ -3,6 +3,8 @@ package bd;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 public class RGrupos {
 
@@ -16,8 +18,11 @@ public class RGrupos {
 
     public static class MensajeGrupo {
         public long messageId;
-        public String sender, content, timestamp;
-        public MensajeGrupo(long id, String s, String c, String ts) { this.messageId = id; this.sender = s; this.content = c; this.timestamp = ts; }
+        public int groupId;
+        public String sender, content, timestamp, groupName;
+        public MensajeGrupo(long id, int gid, String s, String c, String ts, String gn) {
+            this.messageId = id; this.groupId = gid; this.sender = s; this.content = c; this.timestamp = ts; this.groupName = gn;
+        }
     }
 
     public static void crearTablas(Statement stmt) throws SQLException {
@@ -53,9 +58,86 @@ public class RGrupos {
         }
     }
 
+    public static List<Integer> obtenerTodosLosGruposDeUsuario(String username) {
+        List<Integer> grupos = new ArrayList<>();
+        grupos.add(ID_TODOS);
+
+        String sql = "SELECT group_id FROM " + TABLE_GROUP_MEMBERS + " WHERE username = ?";
+
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, username);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    grupos.add(rs.getInt("group_id"));
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al obtener grupos del usuario: " + e.getMessage());
+        }
+        return grupos;
+    }
+
+    public static boolean esMiembroDeGrupo(String username, int groupId) {
+        if (groupId == ID_TODOS) return true;
+
+        String sql = "SELECT COUNT(*) FROM " + TABLE_GROUP_MEMBERS + " WHERE group_id = ? AND username = ?";
+
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, groupId);
+            pstmt.setString(2, username);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al verificar membresía de grupo: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public static List<MensajeGrupo> obtenerMensajesNoVistos(String username) {
+        List<Integer> groupIds = obtenerTodosLosGruposDeUsuario(username);
+        List<MensajeGrupo> mensajes = new ArrayList<>();
+
+        if (groupIds.isEmpty()) return mensajes;
+
+        StringBuilder sql = new StringBuilder("SELECT M.message_id, M.group_id, M.sender_username, M.content, M.timestamp, G.group_name ")
+                .append("FROM ").append(TABLE_GROUP_MESSAGES).append(" M JOIN ").append(TABLE_GROUPS).append(" G ON M.group_id = G.group_id ")
+                .append("LEFT JOIN ").append(TABLE_USER_LAST_SEEN).append(" L ON M.group_id = L.group_id AND L.username = ? ")
+                .append("WHERE M.group_id IN (");
+
+        for (int i = 0; i < groupIds.size(); i++) {
+            sql.append("?");
+            if (i < groupIds.size() - 1) sql.append(", ");
+        }
+        sql.append(") AND M.message_id > COALESCE(L.last_message_id, 0) ORDER BY M.group_id ASC, M.timestamp ASC");
+
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql.toString())) {
+            pstmt.setString(1, username);
+            int paramIndex = 2;
+            for (int groupId : groupIds) {
+                pstmt.setInt(paramIndex++, groupId);
+            }
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    mensajes.add(new MensajeGrupo(
+                            rs.getLong("message_id"),
+                            rs.getInt("group_id"),
+                            rs.getString("sender_username"),
+                            rs.getString("content"),
+                            rs.getString("timestamp"),
+                            rs.getString("group_name")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al obtener mensajes no vistos de múltiples grupos: " + e.getMessage());
+        }
+        return mensajes;
+    }
+
     public static boolean crearGrupo(String groupName, String creator) {
         if (obtenerGrupoIdPorNombre(groupName) != -1) return false;
-
         String sqlGrupo = "INSERT INTO " + TABLE_GROUPS + " (group_name, admin_username) VALUES (?, ?)";
         String sqlMiembro = "INSERT INTO " + TABLE_GROUP_MEMBERS + " (group_id, username) VALUES (?, ?)";
 
@@ -205,8 +287,8 @@ public class RGrupos {
             pstmt.setLong(2, lastSeenId);
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
-                    mensajes.add(new MensajeGrupo(rs.getLong("message_id"), rs.getString("sender_username"),
-                            rs.getString("content"), rs.getString("timestamp")));
+                    mensajes.add(new MensajeGrupo(rs.getLong("message_id"), 0, rs.getString("sender_username"),
+                            rs.getString("content"), rs.getString("timestamp"), ""));
                 }
             }
         } catch (SQLException e) {

@@ -2,6 +2,7 @@ package mensaje;
 
 import servidormulti.ServidorMulti;
 import servidormulti.UnCliente;
+import bd.RGrupos;
 import java.io.IOException;
 
 public class Mensaje {
@@ -37,13 +38,13 @@ public class Mensaje {
 
     public static void notificarAlGrupo(String notificacion, UnCliente clienteExcluido, ServidorMulti servidor) {
         if (clienteExcluido == null) return;
-        int grupoId = clienteExcluido.getCurrentGroupId();
-        if (grupoId == bd.RGrupos.ID_TODOS) return;
+        int groupId = clienteExcluido.getCurrentGroupId();
+        if (groupId == RGrupos.ID_TODOS) return;
 
-        System.out.println(notificacion + " (Grupo: " + clienteExcluido.getCurrentGroupName() + ")");
+        System.out.println("Notificación de grupo (ID: " + groupId + ", " + clienteExcluido.getCurrentGroupName() + "): " + notificacion);
 
         for (UnCliente cliente : servidor.getTodosLosClientes()) {
-            if (cliente != clienteExcluido && cliente.getCurrentGroupId() == grupoId) {
+            if (cliente != clienteExcluido && cliente.getCurrentGroupId() == groupId) {
                 intentarEnviarNotificacion(cliente, notificacion);
             }
         }

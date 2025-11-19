@@ -8,7 +8,9 @@ import servidormulti.estado.EstadoCliente;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class UnCliente implements Runnable {
 
@@ -31,7 +33,6 @@ public class UnCliente implements Runnable {
     UnCliente(Socket s, ServidorMulti servidor) throws IOException {
         salida = new DataOutputStream(s.getOutputStream());
         entrada = new DataInputStream(s.getInputStream());
-
         this.servidor = servidor;
         this.autenticador = new AutenticadorCliente(this, servidor);
         this.controladorJuego = servidor.getControladorJuego();
@@ -101,6 +102,7 @@ public class UnCliente implements Runnable {
 
         servidor.removerCliente(nombreDesconectado);
         String msg = nombreDesconectado + " ha abandonado el chat.";
+
         if (this.currentGroupId != RGrupos.ID_TODOS) {
             Mensaje.notificarAlGrupo(msg, this, servidor);
         } else {
@@ -112,23 +114,28 @@ public class UnCliente implements Runnable {
 
     public void enviarMensajesPendientes() throws IOException {
         if (!isAutenticado()) return;
-        List<RGrupos.MensajeGrupo> mensajes = RGrupos.obtenerMensajesNoVistos(this.nombreCliente, this.currentGroupId);
+
+        List<RGrupos.MensajeGrupo> mensajes = RGrupos.obtenerMensajesNoVistos(this.nombreCliente);
 
         if (mensajes.isEmpty()) {
-            enviarMensaje("Sistema: No hay mensajes nuevos en '" + this.currentGroupName + "'.");
+            enviarMensaje("Sistema: No hay mensajes nuevos en ninguno de tus grupos.");
             return;
         }
 
-        enviarMensaje("Sistema: --- Mostrando mensajes no leídos para '" + this.currentGroupName + "' ---");
-        long ultimoId = 0;
+        enviarMensaje("Sistema: --- Mostrando mensajes no leídos ---");
+
+        Map<Integer, Long> lastSeenByGroup = new HashMap<>();
+
         for (RGrupos.MensajeGrupo msg : mensajes) {
-            enviarMensaje("[" + msg.timestamp + "] " + msg.sender + ": " + msg.content);
-            ultimoId = msg.messageId;
+            enviarMensaje("[" + msg.groupName + "] [" + msg.timestamp + "] " + msg.sender + ": " + msg.content);
+
+            lastSeenByGroup.put(msg.groupId, msg.messageId);
         }
 
-        if (ultimoId > 0) {
-            RGrupos.actualizarUltimoMensajeVisto(this.nombreCliente, this.currentGroupId, ultimoId);
+        for (Map.Entry<Integer, Long> entry : lastSeenByGroup.entrySet()) {
+            RGrupos.actualizarUltimoMensajeVisto(this.nombreCliente, entry.getKey(), entry.getValue());
         }
+
         enviarMensaje("Sistema: --- Fin de mensajes no leídos ---");
     }
 
